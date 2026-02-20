@@ -1,0 +1,67 @@
+<section class="topbar">
+  <div class="brand">客服後台</div>
+  <div class="actions">
+    <button class="ghost" (click)="refresh()" [disabled]="loading">刷新</button>
+    <button class="ghost" (click)="logout()">清除 Token</button>
+  </div>
+</section>
+
+<section class="dash" *ngIf="dashboard as d">
+  <div class="kpi">
+    <div class="num">{{ d.today_new }}</div>
+    <div class="label">今日新單</div>
+  </div>
+  <div class="kpi">
+    <div class="num">{{ d.open_cnt }}</div>
+    <div class="label">輪到我回</div>
+  </div>
+  <div class="kpi">
+    <div class="num">{{ d.pending_cnt }}</div>
+    <div class="label">等客回</div>
+  </div>
+  <div class="kpi danger">
+    <div class="num">{{ d.overdue_60m }}</div>
+    <div class="label">超時 60m</div>
+  </div>
+</section>
+
+<section class="controls">
+  <div class="seg">
+    <button [class.active]="mode==='turn'" (click)="setMode('turn')">Turn</button>
+    <button [class.active]="mode==='closed'" (click)="setMode('closed')">Closed</button>
+  </div>
+
+  <input [(ngModel)]="search" placeholder="搜尋：客名 / subject / 最後一句 / ticketId" />
+  <label class="chk">
+    <input type="checkbox" [(ngModel)]="onlyOverdue" />
+    只看超時 60m
+  </label>
+
+  <div class="hint" *ngIf="loading">更新中…</div>
+  <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+</section>
+
+<section *ngIf="mode==='turn'">
+  <h2>輪到我回（open）</h2>
+  <app-ticket-list-item
+    *ngFor="let t of filtered(openItems, 'open')"
+    [ticket]="t"
+  ></app-ticket-list-item>
+  <div class="empty" *ngIf="filtered(openItems, 'open').length===0">目前沒有 open</div>
+
+  <h2 class="mt">等客人回（pending）</h2>
+  <app-ticket-list-item
+    *ngFor="let t of filtered(pendingItems, 'pending')"
+    [ticket]="t"
+  ></app-ticket-list-item>
+  <div class="empty" *ngIf="filtered(pendingItems, 'pending').length===0">目前沒有 pending</div>
+</section>
+
+<section *ngIf="mode==='closed'">
+  <h2>已結案（closed）</h2>
+  <app-ticket-list-item
+    *ngFor="let t of filtered(closedItems, 'closed')"
+    [ticket]="t"
+  ></app-ticket-list-item>
+  <div class="empty" *ngIf="filtered(closedItems, 'closed').length===0">目前沒有 closed</div>
+</section>

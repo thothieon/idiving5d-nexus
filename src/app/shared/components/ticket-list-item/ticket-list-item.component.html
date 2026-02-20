@@ -1,0 +1,30 @@
+<a class="card" [class.overdue]="isOverdue()" [routerLink]="['/admin/tickets', ticket.ticket_id]">
+  <div class="left">
+    <ng-container *ngIf="ticket.picture_url; else ph">
+      <img class="avatar" [src]="ticket.picture_url!" alt="avatar" (error)="ticket.picture_url=null" />
+
+    </ng-container>
+    <ng-template #ph>
+      <div class="avatar ph">{{ fallbackAvatar(name()) }}</div>
+    </ng-template>
+  </div>
+
+  <div class="mid">
+    <div class="row1">
+      <div class="name">{{ name() }}</div>
+      <div class="badge" [class.p0]="ticket.priority==='high'">{{ ticket.priority }}</div>
+    </div>
+
+    <div class="row2">
+      <div class="subject">{{ subject() }}</div>
+    </div>
+
+    <div class="row3" *ngIf="preview()">
+      {{ preview() }}
+    </div>
+
+    <div class="meta">
+      #{{ ticket.ticket_id }} · {{ ticket.channel_type }} · {{ ticket.updated_at }}
+    </div>
+  </div>
+</a>

@@ -1,0 +1,28 @@
+<section class="wrap">
+  <div class="card">
+    <h1>客服後台</h1>
+    <p class="hint">請貼上 Staff Token（Header：X-Admin-Token）</p>
+
+    <textarea
+      [(ngModel)]="token"
+      rows="3"
+      placeholder="adm_xxx..."
+      autocomplete="off"
+      spellcheck="false"
+    ></textarea>
+
+    <button class="btn" (click)="login()" [disabled]="loading || !token.trim()">
+      {{ loading ? '驗證中…' : '登入' }}
+    </button>
+
+    <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+
+    <div class="tips">
+      <div class="t">小提醒</div>
+      <ul>
+        <li>Token 會存到 localStorage：<code>ADMIN_TOKEN</code></li>
+        <li>若 token 被撤銷，會自動要求重新登入</li>
+      </ul>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,46 @@
+<section class="head">
+  <a class="back" routerLink="/admin/turn">←</a>
+  <div class="title">Ticket #{{ ticketId }}</div>
+  <button class="ghost" (click)="close()">結案</button>
+</section>
+
+<div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+
+<section class="chat">
+  <div class="msg" *ngFor="let m of items" [class.in]="m.direction==='in'" [class.out]="m.direction==='out'">
+    <div class="avatar">
+      <ng-container *ngIf="m.sender_picture_url; else ph">
+        <img [src]="m.sender_picture_url" alt="avatar" (error)="onAvatarError(m)" />
+      </ng-container>
+      <ng-template #ph>
+        <div class="ph">{{ (m.sender_name || (m.direction==='out' ? '服' : '客')).slice(0,1) }}</div>
+      </ng-template>
+    </div>
+
+    <div class="bubble">
+      <div class="who">
+        <div class="name">{{ m.sender_name || (m.direction==='out' ? '客服' : '客人') }}</div>
+        <div class="time">{{ m.created_at }}</div>
+      </div>
+
+      <ng-container [ngSwitch]="bodyType(m)">
+        <ng-container *ngSwitchCase="'image'">
+          <img class="img" [src]="bodyImage(m)" alt="content" (error)="onImageError($event)" />
+        </ng-container>
+
+        <ng-container *ngSwitchDefault>
+          <div class="text">{{ m.text }}</div>
+        </ng-container>
+      </ng-container>
+    </div>
+  </div>
+
+  <div class="hint" *ngIf="loading">更新中…</div>
+</section>
+
+<section class="composer">
+  <textarea [(ngModel)]="draft" rows="2" placeholder="輸入要回覆的內容…"></textarea>
+  <button class="send" [disabled]="sending || !draft.trim()" (click)="send()">
+    {{ sending ? '送出中' : '送出' }}
+  </button>
+</section>

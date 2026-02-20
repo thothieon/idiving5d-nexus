@@ -1,0 +1,80 @@
+.wrap {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: #070b12;
+  color: #e5e7eb;
+}
+
+.card {
+  width: min(520px, 100%);
+  background: #0b1220;
+  border: 1px solid #1f2a44;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
+}
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.hint {
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+textarea {
+  width: 95%;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #334155;
+  background: #0a0f1c;
+  color: #fff;
+  outline: none;
+  resize: vertical;
+}
+
+.btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 800;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+}
+
+.err {
+  margin-top: 10px;
+  color: #f87171;
+  font-size: 13px;
+}
+
+.tips {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #1f2a44;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.tips .t {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+code {
+  background: rgba(255,255,255,.06);
+  padding: 2px 6px;
+  border-radius: 8px;
+}

@@ -391,6 +391,12 @@ def close_ticket(
     finally:
         conn.close()
 
+@router.get("/staff/me")
+def staff_me(staff: dict = Depends(get_current_staff)):
+    """
+    驗證 X-Admin-Token 並回傳目前 staff 資訊給前端
+    """
+    return {"ok": True, "staff": staff}
 
 @router.get("/stats/questions")
 def stats_questions(
