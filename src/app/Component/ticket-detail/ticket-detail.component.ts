@@ -71,18 +71,26 @@ export class TicketDetailComponent implements OnInit {
     const text = (this.draft || '').trim();
     if (!text || this.sending) return;
 
+    // 先把輸入框清掉（視覺上立刻清空）
+    this.draft = '';
+
     this.sending = true;
     this.errorMsg = '';
 
     this.api.reply(this.ticketId, text).subscribe({
       next: () => {
+        // 成功：維持清空，並刷新訊息
         this.draft = '';
         this.sending = false;
         this.refresh();
       },
       error: (err) => {
         this.sending = false;
-        // ✅ 把後端回的 error 顯示出來（超重要）
+      
+        // 失敗：把剛剛要送的文字還回輸入框，避免使用者白打
+        this.draft = text;
+
+        // 把後端回的 error 顯示出來（超重要）
         const backend = err?.error?.error || err?.error?.message;
         this.errorMsg = backend || `送出失敗（HTTP ${err?.status || '??'}）`;
         console.log('reply error', err);
