@@ -1,6 +1,8 @@
 # app/routes_admin.py
 import json
 import time
+import os
+import requests
 from datetime import datetime
 from typing import Any
 
@@ -10,8 +12,48 @@ from pydantic import BaseModel
 from app.auth_staff import get_conn, get_current_staff, require_admin_staff
 from app.security_staff_tokens import generate_admin_token, sha256_hex, token_prefix
 
+# LINE 設定
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+LINE_PUSH_API = "https://api.line.me/v2/bot/message/push"
+
 router = APIRouter()
 
+
+# LINE Push API 封裝
+def line_push(user_id_or_group_id: str, text: str):
+    """
+    呼叫 LINE Push API 推送消息到用戶/群組/房間
+    
+    Args:
+        user_id_or_group_id: 用戶 ID、群組 ID 或房間 ID
+        text: 要推送的文字內容
+    
+    Returns:
+        (status_code, response_text, payload)
+    """
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        return (500, "LINE_CHANNEL_ACCESS_TOKEN not configured", {})
+    
+    payload = {
+        "to": user_id_or_group_id,
+        "messages": [
+            {
+                "type": "text",
+                "text": text,
+            }
+        ]
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+    }
+    
+    try:
+        response = requests.post(LINE_PUSH_API, json=payload, headers=headers, timeout=10)
+        return (response.status_code, response.text, payload)
+    except Exception as e:
+        return (500, str(e), payload)
 
 
 DEFAULT_AGENT_NAME = "客服"
@@ -98,12 +140,46 @@ def _insert_outgoing_message_raw(
     staff_id: int | None,
     staff_name: str | None,
 ):
-    """
-    ✅ 修正點：messages_raw.event_id NOT NULL 的情境下，要保證 event_id 非空
-    """
+    # 修正點：先在 line_events 表插入記錄，再在 messages_raw 參考它（滿足外鍵約束）    
     event_id = f"admin_reply_{ticket_id}_{int(time.time())}"
 
     with conn.cursor() as cur:
+        # 步驟 1：先在 line_events 表插入客服回覆事件
+        event_payload = {
+            "type": "message",
+            "source": {"type": "staff"},
+            "message": {"type": "text", "text": text},
+            "meta": {"ticket_id": ticket_id, "conversation_id": conversation_id},
+        }
+        
+        cur.execute(
+            """
+            INSERT INTO line_events
+              (event_id, event_type, source_type, user_id, conversation_id, ticket_id, event_ts, raw_json, created_at)
+            VALUES
+              (%s, %s, %s, %s, %s, %s, NOW(), %s, NOW())
+            ON DUPLICATE KEY UPDATE
+              raw_json=VALUES(raw_json),
+              event_ts=VALUES(event_ts)
+            """,
+            (
+                event_id,
+                "message",
+                "staff",          # 如果你後來確認 source_type 不是 enum，staff OK；否則改成 'user' 或 'admin'
+                None,             # user_id
+                conversation_id,
+                ticket_id,
+                json.dumps(event_payload, ensure_ascii=False),
+            ),
+        )
+        
+        # 立刻驗證 line_events 是否真的插入成功（避免外鍵錯拖到下一步才爆）
+        cur.execute("SELECT COUNT(*) AS c FROM line_events WHERE event_id=%s", (event_id,))
+        chk = cur.fetchone()
+        if not chk or int(chk.get("c", 0)) != 1:
+            raise RuntimeError(f"line_events insert failed or not visible, event_id={event_id}")
+        
+        # 步驟 2：再在 messages_raw 表插入消息（event_id 外鍵約束已滿足）
         cur.execute(
             """
             INSERT INTO messages_raw
@@ -116,7 +192,7 @@ def _insert_outgoing_message_raw(
                %s, %s, %s)
             """,
             (
-                event_id,          # ✅ 不再塞 None
+                event_id,
                 conversation_id,
                 ticket_id,
                 None,
