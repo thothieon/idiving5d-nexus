@@ -1,1 +1,129 @@
-/* You can add global styles to this file, and also import other style files */
+// ===== 深色主題變數 =====
+$dark-bg: #0b0c10;
+$dark-surface: #0f1016;
+$dark-border: rgba(255, 255, 255, 0.08);
+$dark-text: #e8e8ea;
+$dark-muted: #cbd5e1;
+$accent: #38bdf8;
+$danger: #fb7185;
+
+$spacing: 8px;
+$radius: 10px;
+
+// ===== Mixin =====
+@mixin flex-center {
+  display: flex;
+  gap: $spacing;
+  align-items: center;
+}
+
+@mixin btn-base {
+  padding: 6px 10px;
+  border-radius: $radius;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+@mixin glass {
+  background: rgba(15, 16, 22, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+// ===== 全域 =====
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --color-dark-bg: #{$dark-bg};
+  --color-surface: #{$dark-surface};
+  --color-text: #{$dark-text};
+  --color-muted: #{$dark-muted};
+  --color-accent: #{$accent};
+  --color-border: #{$dark-border};
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial, sans-serif;
+  background: $dark-bg;
+  color: $dark-text;
+}
+
+// ===== 按鈕 =====
+.btn,
+button {
+  @include btn-base;
+  border: 1px solid $dark-border;
+  background: transparent;
+  color: $dark-text;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &.primary {
+    background: $accent;
+    color: $dark-bg;
+    border: none;
+  }
+
+  &.ghost {
+    background: transparent;
+    border: 1px solid $dark-border;
+  }
+
+  &.warn {
+    color: $danger;
+  }
+}
+
+// ===== 連結 =====
+a {
+  color: $accent;
+  text-decoration: none;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &.link {
+    color: $dark-muted;
+    padding: 6px 8px;
+    border-radius: $radius;
+    background: rgba(255, 255, 255, 0.04);
+
+    &.warn {
+      color: $danger;
+    }
+
+    &.active {
+      color: $accent;
+      background: rgba(56, 189, 248, 0.12);
+    }
+  }
+}
+
+// ===== 輸入框 =====
+input,
+textarea {
+  padding: 8px 10px;
+  border: 1px solid $dark-border;
+  border-radius: $radius;
+  background: $dark-surface;
+  color: $dark-text;
+  font-family: inherit;
+  outline: none;
+
+  &:focus {
+    border-color: $accent;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+  }
+
+  &::placeholder {
+    color: rgba(203, 213, 225, 0.6);
+  }
+}

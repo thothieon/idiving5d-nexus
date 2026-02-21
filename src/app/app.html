@@ -5,8 +5,8 @@
   </div>
 
   <div class="actions">
-    <!-- <a routerLink="/admin/turn" class="link">工作台</a> -->
-    <!-- <a routerLink="/admin/login" class="link" [class.warn]="!hasToken()">Token</a> -->
+    <a routerLink="/admin/turn" class="link">工作台</a>
+    <a routerLink="/admin/login" class="link" [class.warn]="!hasToken()">Token</a>
     <button class="ghost" *ngIf="hasToken()" (click)="clearToken()">清除</button>
   </div>
 </header>

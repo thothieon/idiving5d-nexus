@@ -1,0 +1,73 @@
+@use '../styles.scss' as *;
+
+:host {
+  display: block;
+  min-height: 100vh;
+  background: $dark-bg;
+  color: $dark-text;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 52px;
+  @include flex-center;
+  justify-content: space-between;
+  padding: 0 12px;
+  @include glass;
+  border-bottom: 1px solid $dark-border;
+}
+
+.brand {
+  @include flex-center;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: $accent;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.65);
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.actions {
+  @include flex-center;
+  font-size: 13px;
+}
+
+.main {
+  padding: 12px 12px 72px;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  @include glass;
+  border-top: 1px solid $dark-border;
+
+  a {
+    display: grid;
+    place-items: center;
+    color: $dark-muted;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+    transition: color 0.2s;
+
+    &.active {
+      color: $accent;
+    }
+  }
+}
