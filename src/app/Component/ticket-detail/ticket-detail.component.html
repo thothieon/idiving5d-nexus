@@ -1,46 +1,198 @@
-<section class="head">
-  <a class="back" routerLink="/admin/turn">←</a>
-  <div class="title">Ticket #{{ ticketId }}</div>
-  <button class="ghost" (click)="close()">結案</button>
-</section>
+<!-- ticket-detail.component.html -->
+<div class="detail-wrap">
 
-<div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+  <!-- ── 頂部返回列 ────────────────────────────────────── -->
+  <header class="detail-topbar">
+    <a class="back-btn" routerLink="/admin/turn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
 
-<section class="chat">
-  <div class="msg" *ngFor="let m of items" [class.in]="m.direction==='in'" [class.out]="m.direction==='out'">
-    <div class="avatar">
-      <ng-container *ngIf="m.sender_picture_url; else ph">
-        <img [src]="m.sender_picture_url" alt="avatar" (error)="onAvatarError(m)" />
-      </ng-container>
-      <ng-template #ph>
-        <div class="ph">{{ (m.sender_name || (m.direction==='out' ? '服' : '客')).slice(0,1) }}</div>
-      </ng-template>
-    </div>
-
-    <div class="bubble">
-      <div class="who">
-        <div class="name">{{ m.sender_name || (m.direction==='out' ? '客服' : '客人') }}</div>
-        <div class="time">{{ m.created_at }}</div>
+    <div class="topbar-info">
+      <div class="topbar-name">{{ customerName || '客服對話' }}</div>
+      <div class="topbar-sub">
+        <span class="status-dot" [style.background]="statusColor"></span>
+        {{ statusLabel }}
+        <span class="ticket-num">#{{ ticketId }}</span>
       </div>
-
-      <ng-container [ngSwitch]="bodyType(m)">
-        <ng-container *ngSwitchCase="'image'">
-          <img class="img" [src]="bodyImage(m)" alt="content" (error)="onImageError($event)" />
-        </ng-container>
-
-        <ng-container *ngSwitchDefault>
-          <div class="text">{{ m.text }}</div>
-        </ng-container>
-      </ng-container>
     </div>
+
+    <button class="icon-btn" (click)="showPanel = !showPanel">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- ── 錯誤列 ──────────────────────────────────────── -->
+  <div class="error-bar" *ngIf="errorMsg">
+    {{ errorMsg }}
+    <button (click)="errorMsg=''">✕</button>
   </div>
 
-  <div class="hint" *ngIf="loading">更新中…</div>
-</section>
+  <!-- ── 對話主體 ──────────────────────────────────────── -->
+  <section class="messages-area">
+    <div class="messages-scroll">
 
-<section class="composer">
-  <textarea [(ngModel)]="draft" rows="2" placeholder="輸入要回覆的內容…"></textarea>
-  <button class="send" [disabled]="sending || !draft.trim()" (click)="send()">
-    {{ sending ? '送出中' : '送出' }}
-  </button>
-</section>
+      <ng-container *ngFor="let m of items; trackBy: trackById">
+        <div class="bubble-row" [class.out]="m.direction==='out'" [class.in]="m.direction==='in'">
+
+          <!-- 客戶頭像 -->
+          <div class="avatar" *ngIf="m.direction==='in'">
+            <img *ngIf="m.sender_picture_url" [src]="m.sender_picture_url"
+                 (error)="onAvatarError(m)" alt="" />
+            <span *ngIf="!m.sender_picture_url" class="avatar-fallback">
+              {{ (m.sender_name || '?').slice(0,1) }}
+            </span>
+          </div>
+
+          <div class="bubble-col" [class.out-col]="m.direction==='out'">
+            <div class="sender-label" *ngIf="m.direction==='out' && m.sender_name">
+              {{ m.sender_name }}
+            </div>
+
+            <div class="bubble" [class.bubble-in]="m.direction==='in'"
+                                [class.bubble-out]="m.direction==='out'">
+
+              <ng-container *ngIf="bodyType(m)==='text'">
+                <span class="bubble-text">{{ bodyText(m) }}</span>
+              </ng-container>
+
+              <ng-container *ngIf="bodyType(m)==='image'">
+                <ng-container *ngIf="mediaSrc(m) as src; else imgPh">
+                  <img class="bubble-img" [src]="src"
+                       (error)="onImageError($event)" (click)="openViewer(m)" alt="圖片" />
+                </ng-container>
+                <ng-template #imgPh><div class="media-ph">🖼 載入中…</div></ng-template>
+              </ng-container>
+
+              <ng-container *ngIf="bodyType(m)==='sticker'">
+                <img class="bubble-sticker" [src]="stickerSrc(m)"
+                     (error)="onImageError($event)" alt="貼圖" />
+              </ng-container>
+
+              <ng-container *ngIf="bodyType(m)==='video'">
+                <ng-container *ngIf="mediaSrc(m) as src; else vidPh">
+                  <video class="bubble-video" [src]="src" controls playsinline></video>
+                </ng-container>
+                <ng-template #vidPh><div class="media-ph">🎬 載入中…</div></ng-template>
+              </ng-container>
+
+              <ng-container *ngIf="bodyType(m)==='audio'">
+                <ng-container *ngIf="mediaSrc(m) as src; else audPh">
+                  <audio [src]="src" controls></audio>
+                </ng-container>
+                <ng-template #audPh><div class="media-ph">🔊 載入中…</div></ng-template>
+              </ng-container>
+
+              <ng-container *ngIf="bodyType(m)==='file'">
+                <div class="bubble-file" (click)="download(m)">
+                  📎 {{ m.content_name || '下載檔案' }}
+                </div>
+              </ng-container>
+            </div>
+
+            <div class="bubble-time" [class.time-out]="m.direction==='out'">
+              {{ formatTime(m.created_at) }}
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <div class="loading-row" *ngIf="loading">載入中…</div>
+      <div #chatBottom></div>
+    </div>
+
+    <!-- 回覆框 -->
+    <div class="reply-bar">
+      <textarea class="reply-input" [(ngModel)]="draft"
+                placeholder="輸入回覆… (Enter 送出)"
+                (keydown)="onEnter($event)"
+                [disabled]="sending" rows="1">
+      </textarea>
+      <button class="send-btn" [class.ready]="draft.trim()"
+              (click)="send()" [disabled]="!draft.trim() || sending">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- ── 右側抽屜 ──────────────────────────────────────── -->
+  <div class="drawer-overlay" *ngIf="showPanel" (click)="showPanel=false"></div>
+
+  <aside class="side-drawer" [class.open]="showPanel">
+    <div class="drawer-header">
+      <span>工單資訊</span>
+      <button class="icon-btn" (click)="showPanel=false">✕</button>
+    </div>
+
+    <div class="drawer-tabs">
+      <button [class.active]="rightTab==='status'"  (click)="rightTab='status'">狀態</button>
+      <button [class.active]="rightTab==='booking'" (click)="rightTab='booking'">報名</button>
+      <button [class.active]="rightTab==='history'" (click)="rightTab='history'">歷史</button>
+    </div>
+
+    <!-- 狀態 -->
+    <div class="drawer-body" *ngIf="rightTab==='status'">
+      <div class="info-block">
+        <div class="info-label">目前狀態</div>
+        <div class="status-chip" [style.border-color]="statusColor" [style.color]="statusColor">
+          <span class="status-dot sm" [style.background]="statusColor"></span>
+          {{ statusLabel }}
+        </div>
+      </div>
+      <div class="info-block" *ngIf="allowedNext.length">
+        <div class="info-label">切換至</div>
+        <div class="chip-list">
+          <button class="chip-btn" *ngFor="let n of allowedNext"
+                  [disabled]="transitioning" (click)="doTransition(n.status)">
+            {{ n.label }}
+          </button>
+        </div>
+      </div>
+      <button class="full-btn danger" (click)="close()">🔒 結案</button>
+    </div>
+
+    <!-- 報名 -->
+    <div class="drawer-body" *ngIf="rightTab==='booking'">
+      <div class="success-toast" *ngIf="bookingSuccess">✅ 已儲存</div>
+      <div class="field"><label>姓名</label><input [(ngModel)]="bookingForm.name" placeholder="姓名" /></div>
+      <div class="field"><label>電話</label><input [(ngModel)]="bookingForm.phone" placeholder="電話" /></div>
+      <div class="field"><label>Email</label><input [(ngModel)]="bookingForm.email" placeholder="Email" type="email" /></div>
+      <div class="field"><label>課程項目</label><input [(ngModel)]="bookingForm.course_item" placeholder="課程名稱" /></div>
+      <div class="field"><label>預約日期</label><input [(ngModel)]="bookingForm.booking_date" type="date" /></div>
+      <div class="field"><label>備註</label><textarea [(ngModel)]="bookingForm.note" rows="2" placeholder="備註"></textarea></div>
+      <button class="full-btn primary" (click)="saveBooking()" [disabled]="bookingSaving">
+        {{ bookingSaving ? '儲存中…' : '💾 儲存草稿' }}
+      </button>
+      <button class="full-btn success" *ngIf="booking" (click)="confirmBooking()">
+        ✅ 確認報名（結案）
+      </button>
+    </div>
+
+    <!-- 歷史 -->
+    <div class="drawer-body" *ngIf="rightTab==='history'">
+      <div class="empty-hint" *ngIf="!sessionHistory.length">尚無記錄</div>
+      <div class="history-row" *ngFor="let h of sessionHistory">
+        <div class="h-status" [style.color]="statusColor">{{ h.status_label }}</div>
+        <div class="h-meta">
+          <span>{{ h.triggered_by === 'staff' ? (h.staff_name || '客服') : h.triggered_by }}</span>
+          <span>{{ formatTime(h.created_at) }}</span>
+        </div>
+        <div class="h-note" *ngIf="h.note">{{ h.note }}</div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- 圖片 Viewer -->
+<div class="viewer-overlay" *ngIf="viewerOpen" (click)="closeViewer()">
+  <div class="viewer-box" (click)="$event.stopPropagation()">
+    <button class="viewer-close" (click)="closeViewer()">✕</button>
+    <img [src]="viewerSrc" alt="預覽" />
+  </div>
+</div>

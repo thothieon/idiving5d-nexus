@@ -1,65 +1,144 @@
+// admin-api.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
 
-import { TicketMessage } from './models';
+import {
+  TicketMessage, TicketListItem,
+  TicketStatusResponse, SessionHistory,
+  Booking, BookingForm,
+} from './models';
 
 @Injectable({ providedIn: 'root' })
 export class AdminApiService {
-  // 走同網域：production 時 environment.apiBase = ''
-  // private base = (environment.apiBase || '').replace(/\/$/, '');
-  // 因為反向代理，所以用相同網域的 /api 路徑
   private base = '/admin/api';
 
   constructor(private http: HttpClient) {}
 
-  // 你後端有 /admin/api/dashboard
-  dashboard() {
-    return this.http.get<any>(`${this.base}/dashboard`);
+  private authHeaders(): HttpHeaders {
+    const token = localStorage.getItem('ADMIN_TOKEN') || '';
+    return new HttpHeaders({ 'X-Admin-Token': token });
   }
 
-  // ✅ 驗證 token 是否有效（你 curl 已經打通的那支）
+  // ── 系統 ──────────────────────────────────────────────────
+
   me() {
-  const token = localStorage.getItem('ADMIN_TOKEN') || '';
-  const headers = new HttpHeaders({ 'X-Admin-Token': token });
-  return this.http.get(`${this.base}/staff/me`, { headers });
-    //return this.http.get(`${this.base}/staff/me`);
+    return this.http.get(`${this.base}/staff/me`, { headers: this.authHeaders() });
   }
 
-  // ✅ 票券列表（你後端路徑是 /tickets）
-  listTickets(opts: {
-    status?: string;   // 'open,pending,closed'
-    limit?: number;
-    offset?: number;
-    autofill_subject?: number; // 1
-  } = {}) {
-    let params = new HttpParams()
-      .set('status', opts.status ?? 'open,pending')
-      .set('limit', String(opts.limit ?? 80))
-      .set('offset', String(opts.offset ?? 0))
+  dashboard() {
+    return this.http.get<any>(`${this.base}/dashboard`, { headers: this.authHeaders() });
+  }
+
+  // ── Ticket 列表 ───────────────────────────────────────────
+
+  /** 原有列表（保留，TurnWorkbench 在用）*/
+  listTickets(opts: { status?: string; limit?: number; offset?: number; autofill_subject?: number } = {}) {
+    const params = new HttpParams()
+      .set('status',           opts.status            ?? 'open,pending')
+      .set('limit',            String(opts.limit      ?? 80))
+      .set('offset',           String(opts.offset     ?? 0))
       .set('autofill_subject', String(opts.autofill_subject ?? 1));
-
-    return this.http.get<any>(`${this.base}/tickets`, { params }).pipe(
-      map(res => res?.items ?? res ?? [])
-    );
+    return this.http
+      .get<any>(`${this.base}/tickets`, { headers: this.authHeaders(), params })
+      .pipe(map(res => res?.items ?? res ?? []));
   }
 
-  // ✅ messages 正確路徑：/admin/api/tickets/:id/messages
+  /** Angular polling 專用：未結案工單 + current_status + is_overdue */
+  listActiveTickets(limit = 80, offset = 0): Observable<TicketListItem[]> {
+    const params = new HttpParams()
+      .set('limit',  String(limit))
+      .set('offset', String(offset));
+    return this.http
+      .get<any>(`${this.base}/tickets/active`, { headers: this.authHeaders(), params })
+      .pipe(map(res => res?.items ?? []));
+  }
+
+  statusSummary(): Observable<Record<string, number>> {
+    return this.http
+      .get<any>(`${this.base}/tickets/status_summary`, { headers: this.authHeaders() })
+      .pipe(map(res => res?.summary ?? {}));
+  }
+
+  // ── 訊息 ──────────────────────────────────────────────────
+
   getMessages(ticketId: number, limit = 200): Observable<TicketMessage[]> {
     const params = new HttpParams().set('limit', String(limit));
-    return this.http.get<any>(`${this.base}/tickets/${ticketId}/messages`, { params }).pipe(
-      map(res => res?.items ?? res ?? [])
+    return this.http
+      .get<any>(`${this.base}/tickets/${ticketId}/messages`, { headers: this.authHeaders(), params })
+      .pipe(map(res => res?.items ?? res ?? []));
+  }
+
+  reply(ticketId: number, text: string) {
+    return this.http.post(
+      `${this.base}/tickets/${ticketId}/reply`,
+      { text },
+      { headers: this.authHeaders() },
     );
   }
 
-  // ✅ reply 正確路徑：/admin/api/tickets/:id/reply
-  reply(ticketId: number, text: string) {
-    return this.http.post(`${this.base}/tickets/${ticketId}/reply`, { text });
+  close(ticketId: number) {
+    return this.http.post(
+      `${this.base}/tickets/${ticketId}/close`,
+      {},
+      { headers: this.authHeaders() },
+    );
   }
 
-  // ✅ 結案
-  close(ticketId: number) {
-    return this.http.post(`${this.base}/tickets/${ticketId}/close`, {});
+  // ── 狀態機（新增）────────────────────────────────────────
+
+  getTicketStatus(ticketId: number): Observable<TicketStatusResponse> {
+    return this.http.get<any>(
+      `${this.base}/tickets/${ticketId}/status`,
+      { headers: this.authHeaders() },
+    );
+  }
+
+  transition(ticketId: number, status: string, note?: string) {
+    return this.http.post(
+      `${this.base}/tickets/${ticketId}/transition`,
+      { status, note: note ?? null },
+      { headers: this.authHeaders() },
+    );
+  }
+
+  getSessionHistory(ticketId: number): Observable<SessionHistory[]> {
+    return this.http
+      .get<any>(`${this.base}/tickets/${ticketId}/sessions`, { headers: this.authHeaders() })
+      .pipe(map(res => res?.items ?? []));
+  }
+
+  // ── 報名（新增）──────────────────────────────────────────
+
+  getBooking(ticketId: number): Observable<Booking | null> {
+    return this.http
+      .get<any>(`${this.base}/tickets/${ticketId}/booking`, { headers: this.authHeaders() })
+      .pipe(map(res => res?.booking ?? null));
+  }
+
+  upsertBooking(ticketId: number, form: Partial<BookingForm>) {
+    return this.http.post(
+      `${this.base}/tickets/${ticketId}/booking`,
+      form,
+      { headers: this.authHeaders() },
+    );
+  }
+
+  confirmBooking(ticketId: number, status: 'confirmed' | 'cancelled') {
+    return this.http.post(
+      `${this.base}/tickets/${ticketId}/booking/confirm`,
+      { status },
+      { headers: this.authHeaders() },
+    );
+  }
+
+  // ── 媒體（原有，保留）────────────────────────────────────
+
+  getContentBlob(lineMessageId: string): Observable<Blob> {
+    return this.http.get(`${this.base}/content/${lineMessageId}`, {
+      headers: this.authHeaders(),
+      responseType: 'blob',
+    });
   }
 }

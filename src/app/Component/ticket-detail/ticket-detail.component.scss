@@ -1,158 +1,579 @@
-:host {
-  display: block;
-  min-height: 100dvh;
-  background: #070b12;
-  color: #e5e7eb;
+// ticket-detail.component.scss
+@use '../../../styles.scss' as *;
+
+// ── 整體容器 ─────────────────────────────────────────────────
+.detail-wrap {
+  display:        flex;
+  flex-direction: column;
+  height:         100dvh;
+  overflow:       hidden;
+  background:     $dark-bg;
+  color:          $dark-text;
+  position:       relative;
 }
 
-.head {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: grid;
-  grid-template-columns: 44px 1fr 72px;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #0b0f1a;
-  border-bottom: 1px solid #1f2937;
+// ── 頂部列 ───────────────────────────────────────────────────
+.detail-topbar {
+  @include glass;
+  @include flex-center;
+  height:        52px;
+  padding:       0 8px;
+  gap:           6px;
+  border-bottom: 1px solid $dark-border;
+  flex-shrink:   0;
+  position:      sticky;
+  top:           0;
+  z-index:       20;
 }
 
-.back {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid #374151;
-  color: #e5e7eb;
+.back-btn {
+  @include flex-center;
+  color:         $dark-muted;
+  padding:       6px;
+  border-radius: $radius;
+  flex-shrink:   0;
   text-decoration: none;
+
+  &:hover {
+    color:      $dark-text;
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
-.title {
-  font-weight: 900;
+.topbar-info {
+  flex:     1;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+
+  .topbar-name {
+    font-size:     14px;
+    font-weight:   700;
+    white-space:   nowrap;
+    overflow:      hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-sub {
+    @include flex-center;
+    gap:       4px;
+    font-size: 11px;
+    color:     $dark-muted;
+  }
 }
 
-.ghost {
-  height: 40px;
-  border-radius: 12px;
-  background: transparent;
-  border: 1px solid #374151;
-  color: #e5e7eb;
-  font-weight: 800;
+.ticket-num {
+  font-size: 10px;
+  color:     rgba(255, 255, 255, 0.3);
 }
 
-.err {
-  padding: 10px 12px;
-  color: #f87171;
-  max-width: 560px;
-  margin: 0 auto;
+.icon-btn {
+  @include flex-center;
+  background:    none;
+  border:        none;
+  color:         $dark-muted;
+  padding:       6px;
+  border-radius: $radius;
+  cursor:        pointer;
+  flex-shrink:   0;
+
+  &:hover {
+    color:      $dark-text;
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
-.chat {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 12px 12px 92px;
-}
-
-.msg {
-  display: flex;
-  gap: 8px;
-  margin: 10px 0;
-}
-
-.msg.out { justify-content: flex-end; }
-.msg.out .avatar { order: 2; }
-.msg.out .bubble { background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.35); }
-
-.avatar img {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  object-fit: cover;
-}
-
-.ph {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: rgba(255,255,255,.08);
-  color: #cbd5e1;
-  font-weight: 900;
-}
-
-.bubble {
-  max-width: 78%;
-  background: #0b1220;
-  border: 1px solid #1f2a44;
-  border-radius: 16px;
-  padding: 10px;
-}
-
-.who {
-  display: flex;
-  align-items: baseline;
+// ── 錯誤列 ───────────────────────────────────────────────────
+.error-bar {
+  @include flex-center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  background:      rgba(251, 113, 133, 0.15);
+  color:           $danger;
+  font-size:       12px;
+  padding:         8px 12px;
+  flex-shrink:     0;
+  border-bottom:   1px solid rgba(251, 113, 133, 0.2);
+
+  button {
+    background: none;
+    border:     none;
+    color:      $danger;
+    cursor:     pointer;
+    font-size:  14px;
+    padding:    0 4px;
+  }
 }
 
-.name { font-size: 12px; color: #cbd5e1; font-weight: 800; }
-.time { font-size: 11px; color: #64748b; white-space: nowrap; }
-
-.text {
-  color: #e5e7eb;
-  white-space: pre-wrap;
-  line-height: 1.35;
+// ── 訊息區 ───────────────────────────────────────────────────
+.messages-area {
+  flex:           1;
+  display:        flex;
+  flex-direction: column;
+  overflow:       hidden;
 }
 
-.img {
-  max-width: 100%;
-  border-radius: 12px;
-  border: 1px solid #1f2937;
+.messages-scroll {
+  flex:            1;
+  overflow-y:      auto;
+  padding:         12px 12px 8px;
+  scroll-behavior: smooth;
+
+  &::-webkit-scrollbar       { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
 }
 
-.hint {
-  padding: 12px 0;
-  color: #94a3b8;
+// ── 氣泡列 ───────────────────────────────────────────────────
+.bubble-row {
+  display:       flex;
+  align-items:   flex-end;
+  gap:           8px;
+  margin-bottom: 8px;
+
+  &.out { flex-direction: row-reverse; }
+}
+
+.avatar {
+  width:         32px;
+  height:        32px;
+  border-radius: 50%;
+  overflow:      hidden;
+  flex-shrink:   0;
+  background:    rgba(255, 255, 255, 0.1);
+  @include flex-center;
+  justify-content: center;
+
+  img {
+    width:      100%;
+    height:     100%;
+    object-fit: cover;
+  }
+}
+
+.avatar-fallback {
+  font-size:   14px;
+  font-weight: 700;
+  color:       $dark-muted;
+}
+
+.bubble-col {
+  display:        flex;
+  flex-direction: column;
+  max-width:      72%;
+  gap:            2px;
+
+  &.out-col { align-items: flex-end; }
+}
+
+.sender-label {
+  font-size: 10px;
+  color:     $dark-muted;
+  padding:   0 4px;
+}
+
+// ── 氣泡本體 ─────────────────────────────────────────────────
+.bubble {
+  padding:       9px 12px;
+  border-radius: 16px;
+  word-break:    break-word;
+
+  &.bubble-in {
+    background:                rgba(255, 255, 255, 0.07);
+    border-bottom-left-radius: 4px;
+    color:                     $dark-text;
+  }
+
+  &.bubble-out {
+    background:                 $accent;
+    color:                      $dark-bg;
+    border-bottom-right-radius: 4px;
+  }
+
+  .bubble-text {
+    font-size:   14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .bubble-img {
+    max-width:     200px;
+    max-height:    200px;
+    border-radius: 10px;
+    display:       block;
+    cursor:        pointer;
+
+    &:hover { opacity: 0.88; }
+  }
+
+  .bubble-sticker {
+    width:      100px;
+    height:     100px;
+    object-fit: contain;
+  }
+
+  .bubble-video {
+    max-width:     240px;
+    border-radius: 10px;
+  }
+
+  audio { max-width: 220px; }
+
+  .bubble-file {
+    font-size: 13px;
+    cursor:    pointer;
+
+    &:hover { opacity: 0.8; }
+  }
+
+  .media-ph {
+    font-size: 12px;
+    color:     $dark-muted;
+    padding:   4px 0;
+  }
+}
+
+.bubble-time {
+  font-size: 10px;
+  color:     rgba(255, 255, 255, 0.25);
+  padding:   0 4px;
+
+  &.time-out { color: rgba(56, 189, 248, 0.5); }
+}
+
+.loading-row {
   text-align: center;
+  font-size:  12px;
+  color:      $dark-muted;
+  padding:    8px;
 }
 
-.composer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: #0b0f1a;
-  border-top: 1px solid #1f2937;
+// ── 回覆框 ───────────────────────────────────────────────────
+.reply-bar {
+  @include flex-center;
+  @include glass;
+  gap:        8px;
+  padding:    8px 12px;
+  border-top: 1px solid $dark-border;
+  flex-shrink: 0;
 }
 
-textarea {
-  flex: 1;
-  padding: 10px;
-  border-radius: 14px;
-  border: 1px solid #334155;
-  background: #0b1220;
-  color: #fff;
-  outline: none;
+.reply-input {
+  flex:          1;
+  background:    rgba(255, 255, 255, 0.06);
+  border:        1px solid $dark-border;
+  border-radius: 20px;
+  padding:       8px 14px;
+  font-size:     14px;
+  color:         $dark-text;
+  resize:        none;
+  max-height:    100px;
+  line-height:   1.4;
+  font-family:   inherit;
+  outline:       none;
+
+  &:focus {
+    border-color: $accent;
+    box-shadow:   0 0 0 2px rgba(56, 189, 248, 0.15);
+  }
+
+  &::placeholder { color: rgba(255, 255, 255, 0.25); }
+  &:disabled     { opacity: 0.5; }
 }
 
-.send {
-  width: 92px;
-  border-radius: 14px;
-  border: 0;
-  background: #3b82f6;
-  color: #fff;
-  font-weight: 900;
+.send-btn {
+  width:         36px;
+  height:        36px;
+  border-radius: 50%;
+  border:        none;
+  background:    rgba(255, 255, 255, 0.08);
+  color:         rgba(255, 255, 255, 0.25);
+  @include flex-center;
+  justify-content: center;
+  cursor:        pointer;
+  flex-shrink:   0;
+  transition:    all 0.2s;
+
+  &.ready {
+    background: $accent;
+    color:      $dark-bg;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+  }
+
+  &:disabled { opacity: 0.4; cursor: default; }
 }
 
-.send:disabled { opacity: .6; }
+// ── 抽屜遮罩 ─────────────────────────────────────────────────
+.drawer-overlay {
+  position:   fixed;
+  inset:      0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index:    29;
+}
+
+// ── 側邊抽屜 ─────────────────────────────────────────────────
+.side-drawer {
+  position:       fixed;
+  top:            0;
+  right:          0;
+  bottom:         0;
+  width:          280px;
+  @include glass;
+  border-left:    1px solid $dark-border;
+  z-index:        30;
+  display:        flex;
+  flex-direction: column;
+  transform:      translateX(100%);
+  transition:     transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.open { transform: translateX(0); }
+}
+
+.drawer-header {
+  @include flex-center;
+  justify-content: space-between;
+  padding:         14px 16px;
+  font-weight:     700;
+  font-size:       14px;
+  border-bottom:   1px solid $dark-border;
+  flex-shrink:     0;
+}
+
+.drawer-tabs {
+  display:       flex;
+  border-bottom: 1px solid $dark-border;
+  flex-shrink:   0;
+
+  button {
+    flex:         1;
+    padding:      10px 0;
+    background:   none;
+    border:       none;
+    font-size:    12px;
+    color:        $dark-muted;
+    cursor:       pointer;
+    font-weight:  600;
+    border-bottom: 2px solid transparent;
+    transition:   all 0.15s;
+
+    &.active {
+      color:              $accent;
+      border-bottom-color: $accent;
+    }
+  }
+}
+
+.drawer-body {
+  flex:           1;
+  overflow-y:     auto;
+  padding:        16px;
+  display:        flex;
+  flex-direction: column;
+  gap:            12px;
+
+  &::-webkit-scrollbar       { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+}
+
+// ── 狀態元件 ─────────────────────────────────────────────────
+.info-block {
+  display:        flex;
+  flex-direction: column;
+  gap:            8px;
+}
+
+.info-label {
+  font-size:      11px;
+  font-weight:    600;
+  color:          $dark-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-dot {
+  width:         7px;
+  height:        7px;
+  border-radius: 50%;
+  flex-shrink:   0;
+  display:       inline-block;
+
+  &.sm { width: 6px; height: 6px; }
+}
+
+.status-chip {
+  @include flex-center;
+  gap:        6px;
+  padding:    7px 12px;
+  border-radius: $radius;
+  border:     1px solid;
+  font-weight: 600;
+  font-size:  13px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chip-list {
+  display:   flex;
+  flex-wrap: wrap;
+  gap:       6px;
+}
+
+.chip-btn {
+  font-size:     12px;
+  padding:       5px 10px;
+  border-radius: 20px;
+  border:        1px solid rgba(56, 189, 248, 0.4);
+  color:         $accent;
+  background:    rgba(56, 189, 248, 0.08);
+  cursor:        pointer;
+  transition:    all 0.15s;
+
+  &:hover:not(:disabled) { background: rgba(56, 189, 248, 0.2); }
+  &:disabled             { opacity: 0.4; cursor: default; }
+}
+
+// ── 通用按鈕 ─────────────────────────────────────────────────
+.full-btn {
+  width:         100%;
+  padding:       10px;
+  border-radius: $radius;
+  border:        none;
+  font-size:     13px;
+  font-weight:   700;
+  cursor:        pointer;
+  transition:    opacity 0.15s;
+
+  &:disabled             { opacity: 0.5; cursor: default; }
+  &:hover:not(:disabled) { opacity: 0.85; }
+
+  &.primary {
+    background: $accent;
+    color:      $dark-bg;
+  }
+
+  &.success {
+    background: rgba(52, 211, 153, 0.2);
+    color:      #34d399;
+    border:     1px solid rgba(52, 211, 153, 0.3);
+  }
+
+  &.danger {
+    background: rgba(251, 113, 133, 0.15);
+    color:      $danger;
+    border:     1px solid rgba(251, 113, 133, 0.3);
+  }
+}
+
+// ── 報名表單 ─────────────────────────────────────────────────
+.field {
+  display:        flex;
+  flex-direction: column;
+  gap:            4px;
+
+  label {
+    font-size:   11px;
+    font-weight: 600;
+    color:       $dark-muted;
+  }
+
+  input,
+  textarea {
+    width:         100%;
+    box-sizing:    border-box;
+    background:    rgba(255, 255, 255, 0.05);
+    border:        1px solid $dark-border;
+    border-radius: $radius;
+    color:         $dark-text;
+    font-size:     13px;
+    padding:       7px 10px;
+    font-family:   inherit;
+    outline:       none;
+
+    &:focus {
+      border-color: $accent;
+      box-shadow:   0 0 0 2px rgba(56, 189, 248, 0.12);
+    }
+  }
+
+  textarea { resize: vertical; }
+}
+
+.success-toast {
+  background:    rgba(52, 211, 153, 0.15);
+  color:         #34d399;
+  border-radius: $radius;
+  padding:       8px 12px;
+  font-size:     13px;
+  text-align:    center;
+}
+
+// ── 歷史記錄 ─────────────────────────────────────────────────
+.empty-hint {
+  color:      $dark-muted;
+  font-size:  12px;
+  text-align: center;
+  padding:    20px 0;
+}
+
+.history-row {
+  padding:       10px 0;
+  border-bottom: 1px solid $dark-border;
+
+  &:last-child { border-bottom: none; }
+
+  .h-status {
+    font-size:     13px;
+    font-weight:   600;
+    margin-bottom: 3px;
+  }
+
+  .h-meta {
+    display:         flex;
+    justify-content: space-between;
+    font-size:       11px;
+    color:           $dark-muted;
+  }
+
+  .h-note {
+    margin-top:    4px;
+    font-size:     12px;
+    background:    rgba(255, 255, 255, 0.04);
+    border-radius: $radius;
+    padding:       4px 8px;
+  }
+}
+
+// ── 圖片 Viewer ──────────────────────────────────────────────
+.viewer-overlay {
+  position:        fixed;
+  inset:           0;
+  background:      rgba(0, 0, 0, 0.92);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  z-index:         100;
+}
+
+.viewer-box {
+  position:   relative;
+  max-width:  95vw;
+  max-height: 90vh;
+  text-align: center;
+
+  img {
+    max-width:     95vw;
+    max-height:    85vh;
+    border-radius: $radius;
+    object-fit:    contain;
+  }
+}
+
+.viewer-close {
+  position:   absolute;
+  top:        -40px;
+  right:      0;
+  background: none;
+  border:     none;
+  color:      rgba(255, 255, 255, 0.6);
+  font-size:  22px;
+  cursor:     pointer;
+
+  &:hover { color: #fff; }
+}

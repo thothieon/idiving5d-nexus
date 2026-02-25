@@ -26,7 +26,13 @@ export class TicketListItemComponent {
   }
 
   name(): string {
-    return this.ticket.customer_name || this.ticket.display_name || '（未知客戶）';
+    // 有個人名稱優先顯示
+    if (this.ticket.customer_name) return this.ticket.customer_name;
+    if (this.ticket.display_name)  return this.ticket.display_name;
+    // group/room 沒有個人名稱，顯示 channel_type
+    if (this.ticket.channel_type === 'group') return '群組訊息';
+    if (this.ticket.channel_type === 'room')  return '聊天室訊息';
+    return '（未知客戶）';
   }
 
   subject(): string {
@@ -34,6 +40,9 @@ export class TicketListItemComponent {
   }
 
   preview(): string {
-    return this.ticket.last_in_text || '';
+    return (this.ticket as any).last_text
+        || this.ticket.last_in_text
+        || this.ticket.last_customer_text
+        || '';
   }
 }

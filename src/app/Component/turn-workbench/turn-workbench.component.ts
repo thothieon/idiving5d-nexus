@@ -100,7 +100,7 @@ export class TurnWorkbenchComponent implements OnInit {
           String(t.ticket_id).includes(q) ||
           String(t.display_name || '').toLowerCase().includes(q) ||
           String(t.subject || '').toLowerCase().includes(q) ||
-          String(t.last_text || '').toLowerCase().includes(q)
+          String(t.last_customer_text || t.last_in_text || '').toLowerCase().includes(q)
         );
       })
       .filter(t => {
