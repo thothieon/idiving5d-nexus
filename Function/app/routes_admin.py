@@ -6,7 +6,10 @@ import requests
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Depends
+from fastapi.responses import PlainTextResponse, FileResponse
+
+from app.auth_staff import get_current_staff
 from pydantic import BaseModel
 
 from app.auth_staff import get_conn, get_current_staff, require_admin_staff
@@ -15,6 +18,8 @@ from app.security_staff_tokens import generate_admin_token, sha256_hex, token_pr
 # LINE 設定
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
 LINE_PUSH_API = "https://api.line.me/v2/bot/message/push"
+LINE_CONTENT_DIR = os.environ.get("LINE_CONTENT_DIR", "/app/data/line_content").strip() or "/app/data/line_content"
+LINE_EMOJI_DIR = os.environ.get("LINE_EMOJI_DIR", "/app/data/line_emoji").strip() or "/app/data/line_emoji"
 
 router = APIRouter()
 
@@ -245,6 +250,45 @@ def _touch_after_reply(conn, ticket_id: int):
             (ticket_id,),
         )
         cur.execute("UPDATE tickets SET updated_at=NOW() WHERE id=%s", (ticket_id,))
+
+_MIME_EXT = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "video/mp4": ".mp4",
+    "audio/mpeg": ".mp3",
+    "audio/mp4": ".m4a",
+    "application/pdf": ".pdf",
+}
+
+def _ensure_dir(p: str):
+    os.makedirs(p, exist_ok=True)
+
+def _fetch_line_content(message_id: str) -> tuple[bytes, str]:
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN not set")
+    url = f"https://api-data.line.me/v2/bot/message/{message_id}/content"
+    r = requests.get(url, headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}, timeout=30)
+    if r.status_code != 200:
+        raise RuntimeError(f"LINE content fetch failed {r.status_code}: {r.text}")
+    mime = (r.headers.get("Content-Type") or "").split(";")[0].strip() or "application/octet-stream"
+    return r.content, mime
+
+def _fetch_line_emoji(product_id: str, emoji_id: str) -> tuple[bytes, str]:
+    """
+    取得 LINE emoji 圖檔（回傳 bytes + mime）
+    這裡先用一個常見的 CDN 規則；未來 LINE 規則變了，你只要改這裡。
+    """
+    # 常見作法：先抓 png（你也可以改成 webp 或多試幾個 URL）
+    url = f"https://stickershop.line-scdn.net/sticonshop/v1/sticon/{emoji_id}/iPhone/{product_id}.png"
+    r = requests.get(url, timeout=20)
+    if r.status_code != 200:
+        raise RuntimeError(f"LINE emoji fetch failed {r.status_code}: {r.text[:200]}")
+    mime = (r.headers.get("Content-Type") or "").split(";")[0].strip() or "image/png"
+    return r.content, mime
+
+
 
 
 class ReplyBody(BaseModel):
@@ -601,3 +645,108 @@ def staff_tokens_list(
         return {"ok": True, "items": rows}
     finally:
         conn.close()
+
+@router.get("/content/{line_message_id}")
+def get_content(line_message_id: str, staff: dict = Depends(get_current_staff)):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, content_path, content_mime, content_name
+                FROM messages_raw
+                WHERE line_message_id=%s
+                LIMIT 1
+                """,
+                (line_message_id,),
+            )
+            row = cur.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="content not found")
+
+        # 若還沒下載 content：即時去 LINE 抓 -> 存檔 -> UPDATE DB
+        if not row.get("content_path"):
+            try:
+                data, mime = _fetch_line_content(line_message_id)
+                _ensure_dir(LINE_CONTENT_DIR)
+                ext = _MIME_EXT.get(mime, "")
+                fname = f"{line_message_id}{ext}"
+                fpath = os.path.join(LINE_CONTENT_DIR, fname)
+                with open(fpath, "wb") as f:
+                    f.write(data)
+
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE messages_raw
+                        SET content_path=%s, content_mime=%s, content_size=%s, content_name=%s,
+                            content_url=%s
+                        WHERE id=%s
+                        """,
+                        (fpath, mime, len(data), fname, f"/admin/api/content/{line_message_id}", row["id"]),
+                    )
+                    conn.commit()
+
+                row["content_path"] = fpath
+                row["content_mime"] = mime
+                row["content_name"] = fname
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"fetch content failed: {e}")
+
+        return FileResponse(
+            row["content_path"],
+            media_type=row.get("content_mime") or "application/octet-stream",
+            filename=row.get("content_name") or None,
+        )
+    finally:
+        conn.close()
+
+@router.get("/emoji/{product_id}/{emoji_id}")
+def get_emoji(product_id: str, emoji_id: str, staff: dict = Depends(get_current_staff)):
+    """
+    LINE emoji 代理：/admin/api/emoji/{product_id}/{emoji_id}
+    - 先讀本機快取
+    - 沒有再去 LINE 抓一次，存檔快取
+    - 回傳 FileResponse
+    """
+    # 1) 本機檔名：以 product_id/emoji_id 做資料夾，避免檔名衝突
+    safe_product = product_id.replace("/", "_").strip()
+    safe_emoji = emoji_id.replace("/", "_").strip()
+
+    # 你也可以固定 png；或依 mime 決定 ext（這裡用 _MIME_EXT 你已有）
+    _ensure_dir(os.path.join(LINE_EMOJI_DIR, safe_product))
+    base = os.path.join(LINE_EMOJI_DIR, safe_product, safe_emoji)
+
+    # 2) 若快取存在（任一副檔名），直接回
+    for ext in (".png", ".webp", ".gif"):
+        fpath = base + ext
+        if os.path.exists(fpath):
+            return FileResponse(
+                fpath,
+                media_type="image/png" if ext == ".png" else ("image/webp" if ext == ".webp" else "image/gif"),
+                filename=os.path.basename(fpath),
+                headers={"Cache-Control": "public, max-age=31536000, immutable"},
+            )
+
+    # 3) 不存在：去 LINE 抓 -> 存檔 -> 回傳
+    try:
+        data, mime = _fetch_line_emoji(safe_product, safe_emoji)
+        ext = _MIME_EXT.get(mime, ".png")  # 你 routes_admin.py 已有 _MIME_EXT :contentReference[oaicite:2]{index=2}
+        fpath = base + ext
+        with open(fpath, "wb") as f:
+            f.write(data)
+
+        return FileResponse(
+            fpath,
+            media_type=mime or "image/png",
+            filename=os.path.basename(fpath),
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"fetch emoji failed: {e}")
+
+
+
+
+

@@ -254,6 +254,12 @@ class TokenCreateBody(BaseModel):
 class TokenRevokeBody(BaseModel):
     token_id: int
 
+class NoteCreateBody(BaseModel):
+    note: str
+
+class NoteUpdateBody(BaseModel):
+    note: str
+
 
 # ── Endpoints ───────────────────────────────────────────────
 
@@ -277,9 +283,7 @@ def list_tickets(
                   t.id AS ticket_id, t.status, t.priority, t.subject, t.opened_at, t.closed_at,
                   t.last_customer_message_at, t.last_sender_user_id,
                   c.id AS conversation_id, c.channel_type, c.channel_id, c.last_event_at, c.last_message_at,
-                  -- user channel：直接用 channel_id 找 customer
-                  -- group/room channel：用 last_sender_user_id 找最後發訊的人
-                  COALESCE(cu_direct.id,   cu_sender.id)           AS customer_id,
+                  COALESCE(cu_direct.id,           cu_sender.id)           AS customer_id,
                   COALESCE(cu_direct.display_name, cu_sender.display_name) AS display_name,
                   COALESCE(cu_direct.picture_url,  cu_sender.picture_url)  AS picture_url,
                   COALESCE(cu_direct.phone,        cu_sender.phone)        AS phone,
@@ -294,10 +298,8 @@ def list_tickets(
                    ORDER BY mr2.id DESC LIMIT 1) AS last_text
                 FROM tickets t
                 JOIN conversations c ON c.id=t.conversation_id
-                -- user channel 直接 JOIN
                 LEFT JOIN customers cu_direct ON cu_direct.line_user_id=c.channel_id
                                               AND c.channel_type='user'
-                -- group/room channel 用 last_sender_user_id JOIN
                 LEFT JOIN customers cu_sender ON cu_sender.line_user_id=t.last_sender_user_id
                                               AND c.channel_type IN ('group','room')
                 LEFT JOIN assignments a ON a.ticket_id=t.id AND a.status='active'
@@ -599,3 +601,252 @@ def get_emoji(product_id: str, emoji_id: str, staff: dict = Depends(get_current_
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fetch emoji failed: {e}")
+
+
+# ── Customer Notes ───────────────────────────────────────────
+
+def _get_customer_id_by_ticket(conn, ticket_id: int) -> int | None:
+    """從 ticket 找到對應的 customer_id（支援 user / group / room channel）"""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+              COALESCE(cu_direct.id, cu_sender.id) AS customer_id
+            FROM tickets t
+            JOIN conversations c ON c.id = t.conversation_id
+            LEFT JOIN customers cu_direct ON cu_direct.line_user_id = c.channel_id
+                                          AND c.channel_type = 'user'
+            LEFT JOIN customers cu_sender ON cu_sender.line_user_id = t.last_sender_user_id
+                                          AND c.channel_type IN ('group', 'room')
+            WHERE t.id = %s LIMIT 1
+            """,
+            (ticket_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return row.get("customer_id")
+
+
+@router.get("/tickets/{ticket_id}/notes")
+def list_ticket_notes(ticket_id: int, staff: dict = Depends(get_current_staff)):
+    conn = get_conn()
+    try:
+        customer_id = _get_customer_id_by_ticket(conn, ticket_id)
+        if not customer_id:
+            return {"ok": True, "customer_id": None, "items": []}
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, customer_id, staff_id, staff_name, note, created_at, updated_at
+                FROM customer_notes
+                WHERE customer_id = %s
+                ORDER BY id DESC
+                """,
+                (customer_id,),
+            )
+            rows = cur.fetchall()
+        return {"ok": True, "customer_id": customer_id, "items": rows}
+    finally:
+        conn.close()
+
+
+@router.post("/tickets/{ticket_id}/notes")
+def create_ticket_note(ticket_id: int, body: NoteCreateBody, staff: dict = Depends(get_current_staff)):
+    note_text = (body.note or "").strip()
+    if not note_text:
+        raise HTTPException(status_code=400, detail="note is required")
+
+    staff_id   = int(staff.get("staff_id"))
+    staff_name = (staff.get("name") or "客服").strip()
+
+    conn = get_conn()
+    try:
+        customer_id = _get_customer_id_by_ticket(conn, ticket_id)
+        if not customer_id:
+            raise HTTPException(status_code=404, detail="customer not found for this ticket")
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO customer_notes (customer_id, staff_id, staff_name, note, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, NOW(), NOW())
+                """,
+                (customer_id, staff_id, staff_name, note_text),
+            )
+            note_id = cur.lastrowid
+        conn.commit()
+        return {"ok": True, "note_id": note_id, "customer_id": customer_id}
+    except HTTPException:
+        conn.rollback(); raise
+    except Exception as e:
+        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.put("/tickets/{ticket_id}/notes/{note_id}")
+def update_ticket_note(ticket_id: int, note_id: int, body: NoteUpdateBody, staff: dict = Depends(get_current_staff)):
+    note_text = (body.note or "").strip()
+    if not note_text:
+        raise HTTPException(status_code=400, detail="note is required")
+
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            # 只能編輯自己寫的，或 admin 可以編輯全部
+            if staff.get("role") == "admin":
+                cur.execute(
+                    "UPDATE customer_notes SET note=%s, updated_at=NOW() WHERE id=%s",
+                    (note_text, note_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE customer_notes SET note=%s, updated_at=NOW() WHERE id=%s AND staff_id=%s",
+                    (note_text, note_id, int(staff.get("staff_id"))),
+                )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="note not found or permission denied")
+        conn.commit()
+        return {"ok": True}
+    except HTTPException:
+        conn.rollback(); raise
+    except Exception as e:
+        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.delete("/tickets/{ticket_id}/notes/{note_id}")
+def delete_ticket_note(ticket_id: int, note_id: int, staff: dict = Depends(get_current_staff)):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            if staff.get("role") == "admin":
+                cur.execute("DELETE FROM customer_notes WHERE id=%s", (note_id,))
+            else:
+                cur.execute(
+                    "DELETE FROM customer_notes WHERE id=%s AND staff_id=%s",
+                    (note_id, int(staff.get("staff_id"))),
+                )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="note not found or permission denied")
+        conn.commit()
+        return {"ok": True}
+    except HTTPException:
+        conn.rollback(); raise
+    except Exception as e:
+        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+# ── Profile 補齊 ─────────────────────────────────────────────
+
+def _fetch_line_user_profile(user_id: str) -> dict | None:
+    """從 LINE API 取得單一用戶 profile（display_name, picture_url）"""
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        return None
+    url = f"https://api.line.me/v2/bot/profile/{user_id}"
+    try:
+        r = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except Exception:
+        return None
+
+
+@router.post("/customers/sync_profiles")
+def sync_customer_profiles(
+    staff: dict = Depends(get_current_staff),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """
+    把 customers 表中 display_name 或 picture_url 為 null 的用戶，
+    逐一向 LINE API 補齊 profile。
+    每次最多處理 limit 筆（避免 rate limit）。
+    """
+    require_admin_staff(staff)
+    conn = get_conn()
+    updated = 0
+    failed  = 0
+    skipped = 0
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, line_user_id FROM customers
+                WHERE (display_name IS NULL OR picture_url IS NULL)
+                  AND line_user_id IS NOT NULL
+                  AND line_user_id NOT LIKE %(c_prefix)s
+                  AND line_user_id NOT LIKE %(r_prefix)s
+                ORDER BY id DESC
+                LIMIT %(limit)s
+                """,
+                {"c_prefix": "C%", "r_prefix": "R%", "limit": limit},
+            )
+            rows = cur.fetchall()
+
+        for row in rows:
+            cid     = row["id"]
+            user_id = row["line_user_id"]
+            profile = _fetch_line_user_profile(user_id)
+            if not profile:
+                failed += 1
+                continue
+
+            dname = (profile.get("displayName") or "").strip() or None
+            pic   = (profile.get("pictureUrl")  or "").strip() or None
+
+            if not dname and not pic:
+                skipped += 1
+                continue
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE customers
+                    SET display_name = COALESCE(%s, display_name),
+                        picture_url  = COALESCE(%s, picture_url),
+                        updated_at   = NOW()
+                    WHERE id = %s
+                    """,
+                    (dname, pic, cid),
+                )
+            updated += 1
+
+        conn.commit()
+        return {
+            "ok":      True,
+            "updated": updated,
+            "failed":  failed,
+            "skipped": skipped,
+            "total":   len(rows),
+        }
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.get("/customers/profile_stats")
+def customer_profile_stats(staff: dict = Depends(get_current_staff)):
+    """查看目前有多少 customer 缺少 profile"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS total FROM customers")
+            total = cur.fetchone()["total"]
+            cur.execute(
+                "SELECT COUNT(*) AS c FROM customers WHERE display_name IS NULL OR picture_url IS NULL"
+            )
+            missing = cur.fetchone()["c"]
+        return {"ok": True, "total": total, "missing_profile": missing, "has_profile": total - missing}
+    finally:
+        conn.close()

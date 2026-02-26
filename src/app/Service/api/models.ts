@@ -121,3 +121,14 @@ export interface BookingForm {
   booking_date: string;
   note:         string;
 }
+
+// ── 客戶筆記 ─────────────────────────────────────────────────
+export interface CustomerNote {
+  id:          number;
+  customer_id: number;
+  staff_id:    number | null;
+  staff_name:  string | null;
+  note:        string;
+  created_at:  string;
+  updated_at:  string;
+}

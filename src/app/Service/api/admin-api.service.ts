@@ -7,7 +7,7 @@ import { Observable } from 'rxjs';
 import {
   TicketMessage, TicketListItem,
   TicketStatusResponse, SessionHistory,
-  Booking, BookingForm,
+  Booking, BookingForm, CustomerNote,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -33,7 +33,6 @@ export class AdminApiService {
 
   // ── Ticket 列表 ───────────────────────────────────────────
 
-  /** 原有列表（保留，TurnWorkbench 在用）*/
   listTickets(opts: { status?: string; limit?: number; offset?: number; autofill_subject?: number } = {}) {
     const params = new HttpParams()
       .set('status',           opts.status            ?? 'open,pending')
@@ -86,7 +85,7 @@ export class AdminApiService {
     );
   }
 
-  // ── 狀態機（新增）────────────────────────────────────────
+  // ── 狀態機 ───────────────────────────────────────────────
 
   getTicketStatus(ticketId: number): Observable<TicketStatusResponse> {
     return this.http.get<any>(
@@ -109,7 +108,7 @@ export class AdminApiService {
       .pipe(map(res => res?.items ?? []));
   }
 
-  // ── 報名（新增）──────────────────────────────────────────
+  // ── 報名 ─────────────────────────────────────────────────
 
   getBooking(ticketId: number): Observable<Booking | null> {
     return this.http
@@ -133,7 +132,39 @@ export class AdminApiService {
     );
   }
 
-  // ── 媒體（原有，保留）────────────────────────────────────
+  // ── 客戶筆記 ─────────────────────────────────────────────
+
+  getNotes(ticketId: number): Observable<{ customer_id: number | null; items: CustomerNote[] }> {
+    return this.http.get<any>(
+      `${this.base}/tickets/${ticketId}/notes`,
+      { headers: this.authHeaders() },
+    );
+  }
+
+  createNote(ticketId: number, note: string): Observable<any> {
+    return this.http.post(
+      `${this.base}/tickets/${ticketId}/notes`,
+      { note },
+      { headers: this.authHeaders() },
+    );
+  }
+
+  updateNote(ticketId: number, noteId: number, note: string): Observable<any> {
+    return this.http.put(
+      `${this.base}/tickets/${ticketId}/notes/${noteId}`,
+      { note },
+      { headers: this.authHeaders() },
+    );
+  }
+
+  deleteNote(ticketId: number, noteId: number): Observable<any> {
+    return this.http.delete(
+      `${this.base}/tickets/${ticketId}/notes/${noteId}`,
+      { headers: this.authHeaders() },
+    );
+  }
+
+  // ── 媒體 ─────────────────────────────────────────────────
 
   getContentBlob(lineMessageId: string): Observable<Blob> {
     return this.http.get(`${this.base}/content/${lineMessageId}`, {

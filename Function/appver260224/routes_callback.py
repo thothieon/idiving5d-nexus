@@ -170,14 +170,34 @@ def refresh_group_or_room_cache(event: dict):
 
 # ── customers 自動建立 ───────────────────────────────────────
 
+def _fetch_line_profile(user_id: str) -> dict | None:
+    """向 LINE API 取得用戶 profile（displayName, pictureUrl）"""
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        return None
+    try:
+        r = requests.get(
+            f"https://api.line.me/v2/bot/profile/{user_id}",
+            headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            timeout=5,
+        )
+        return r.json() if r.status_code == 200 else None
+    except Exception:
+        return None
+
+
 def ensure_customer_from_event(conn, event: dict):
     """
     每次收到事件，如果能取得 userId 就確保 customers 表裡有這筆記錄。
     display_name 留空沒關係，之後由 /audiences/profiles 補齊。
+    
+    每次收到事件，確保 customers 表有此用戶。
+    若 display_name 或 picture_url 為空，即時向 LINE 補齊。
     """
     user_id = _extract_user_id(event)
     if not user_id:
         return
+
+    # Step 1: INSERT OR IGNORE
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -187,6 +207,45 @@ def ensure_customer_from_event(conn, event: dict):
             """,
             (user_id,),
         )
+
+    # Step 2: 檢查是否需要補 profile
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, display_name, picture_url FROM customers WHERE line_user_id=%s LIMIT 1",
+            (user_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return
+
+    needs_profile = not row.get("display_name") or not row.get("picture_url")
+    if not needs_profile:
+        return
+
+    # Step 3: 向 LINE 拿 profile（group/room 開頭的不是 userId，跳過）
+    if user_id.startswith(("C", "R")):
+        return
+
+    profile = _fetch_line_profile(user_id)
+    if not profile:
+        return
+
+    dname = (profile.get("displayName") or "").strip() or None
+    pic   = (profile.get("pictureUrl")  or "").strip() or None
+
+    if dname or pic:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE customers
+                SET display_name = COALESCE(%s, display_name),
+                    picture_url  = COALESCE(%s, picture_url),
+                    updated_at   = NOW()
+                WHERE line_user_id = %s
+                """,
+                (dname, pic, user_id),
+            )
 
 
 # ── line_events 寫入（固定欄位，問題五修正）─────────────────
@@ -308,20 +367,13 @@ def ensure_ticket_for_conversation(conn, conversation_id: int, channel_id: str) 
         return int(cur.lastrowid)
 
 
-def touch_ticket_on_message(conn, ticket_id: int, sender_user_id: str | None = None):
-    """收到客戶訊息時更新 last_customer_message_at 與 last_sender_user_id"""
+def touch_ticket_on_message(conn, ticket_id: int):
+    """收到客戶訊息時更新 last_customer_message_at"""
     with conn.cursor() as cur:
-        if sender_user_id:
-            cur.execute(
-                "UPDATE tickets SET last_customer_message_at=NOW(), updated_at=NOW(), "
-                "last_sender_user_id=%s WHERE id=%s",
-                (sender_user_id, ticket_id),
-            )
-        else:
-            cur.execute(
-                "UPDATE tickets SET last_customer_message_at=NOW(), updated_at=NOW() WHERE id=%s",
-                (ticket_id,),
-            )
+        cur.execute(
+            "UPDATE tickets SET last_customer_message_at=NOW(), updated_at=NOW() WHERE id=%s",
+            (ticket_id,),
+        )
 
 
 # ── 訊息存檔 ─────────────────────────────────────────────────
@@ -361,6 +413,21 @@ def insert_message_raw_if_any(conn, event: dict, event_id: str, conversation_id:
         return
 
     text = msg.get("text") if mtype == "text" else None
+
+    # 從 customers 查出發送者 display_name / picture_url
+    sender_name = None
+    sender_picture_url = None
+    user_id = _extract_user_id(event)
+    if user_id:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT display_name, picture_url FROM customers WHERE line_user_id=%s LIMIT 1",
+                (user_id,),
+            )
+            cu = cur.fetchone()
+            if cu:
+                sender_name        = cu.get("display_name")
+                sender_picture_url = cu.get("picture_url")
 
     # content
     content_path = content_mime = content_name = content_url = None
@@ -406,7 +473,7 @@ def insert_message_raw_if_any(conn, event: dict, event_id: str, conversation_id:
                'in', %s, %s, %s,
                %s, %s, %s, %s, %s,
                %s, %s, %s, %s,
-               'customer', NULL, NULL,
+               'customer', %s, %s,
                NOW())
             """,
             (
@@ -414,6 +481,7 @@ def insert_message_raw_if_any(conn, event: dict, event_id: str, conversation_id:
                 mtype, text, json.dumps(event, ensure_ascii=False),
                 content_path, content_mime, content_size, content_name, content_url,
                 sticker_id, package_id, sticker_resource_type, sticker_url,
+                sender_name, sender_picture_url,
             ),
         )
 
@@ -487,8 +555,7 @@ async def callback(
 
                 # 7) ticket 收訊時間戳
                 if event.get("type") == "message":
-                    sender_uid = _extract_user_id(event)
-                    touch_ticket_on_message(conn, ticket_id, sender_uid)
+                    touch_ticket_on_message(conn, ticket_id)
                     on_customer_message(conn, ticket_id)
 
                 conn.commit()

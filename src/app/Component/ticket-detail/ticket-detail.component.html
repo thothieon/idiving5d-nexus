@@ -40,10 +40,10 @@
 
           <!-- 客戶頭像 -->
           <div class="avatar" *ngIf="m.direction==='in'">
-            <img *ngIf="m.sender_picture_url" [src]="m.sender_picture_url"
+            <img *ngIf="getPictureUrl(m)" [src]="getPictureUrl(m)!"
                  (error)="onAvatarError(m)" alt="" />
-            <span *ngIf="!m.sender_picture_url" class="avatar-fallback">
-              {{ (m.sender_name || '?').slice(0,1) }}
+            <span *ngIf="!getPictureUrl(m)" class="avatar-fallback">
+              {{ (m.sender_name || '?').slice(0,1).toUpperCase() }}
             </span>
           </div>
 
@@ -131,11 +131,11 @@
 
     <div class="drawer-tabs">
       <button [class.active]="rightTab==='status'"  (click)="rightTab='status'">狀態</button>
-      <button [class.active]="rightTab==='booking'" (click)="rightTab='booking'">報名</button>
+      <button [class.active]="rightTab==='notes'"   (click)="rightTab='notes'">筆記</button>
       <button [class.active]="rightTab==='history'" (click)="rightTab='history'">歷史</button>
     </div>
 
-    <!-- 狀態 -->
+    <!-- ── 狀態 Tab ── -->
     <div class="drawer-body" *ngIf="rightTab==='status'">
       <div class="info-block">
         <div class="info-label">目前狀態</div>
@@ -156,24 +156,65 @@
       <button class="full-btn danger" (click)="close()">🔒 結案</button>
     </div>
 
-    <!-- 報名 -->
-    <div class="drawer-body" *ngIf="rightTab==='booking'">
-      <div class="success-toast" *ngIf="bookingSuccess">✅ 已儲存</div>
-      <div class="field"><label>姓名</label><input [(ngModel)]="bookingForm.name" placeholder="姓名" /></div>
-      <div class="field"><label>電話</label><input [(ngModel)]="bookingForm.phone" placeholder="電話" /></div>
-      <div class="field"><label>Email</label><input [(ngModel)]="bookingForm.email" placeholder="Email" type="email" /></div>
-      <div class="field"><label>課程項目</label><input [(ngModel)]="bookingForm.course_item" placeholder="課程名稱" /></div>
-      <div class="field"><label>預約日期</label><input [(ngModel)]="bookingForm.booking_date" type="date" /></div>
-      <div class="field"><label>備註</label><textarea [(ngModel)]="bookingForm.note" rows="2" placeholder="備註"></textarea></div>
-      <button class="full-btn primary" (click)="saveBooking()" [disabled]="bookingSaving">
-        {{ bookingSaving ? '儲存中…' : '💾 儲存草稿' }}
-      </button>
-      <button class="full-btn success" *ngIf="booking" (click)="confirmBooking()">
-        ✅ 確認報名（結案）
-      </button>
+    <!-- ── 筆記 Tab ── -->
+    <div class="drawer-body notes-body" *ngIf="rightTab==='notes'">
+
+      <!-- 無 customer 提示 -->
+      <div class="empty-hint" *ngIf="customerId === null">
+        無法識別此對話的客戶身份，無法新增筆記
+      </div>
+
+      <ng-container *ngIf="customerId !== null">
+
+        <!-- 筆記列表 -->
+        <div class="note-list">
+          <div class="empty-hint" *ngIf="!notes.length">尚無筆記，輸入內容新增</div>
+
+          <div class="note-card" *ngFor="let n of notes; trackBy: trackNoteById">
+
+            <!-- 閱讀模式 -->
+            <ng-container *ngIf="editingNoteId !== n.id">
+              <div class="note-text">{{ n.note }}</div>
+              <div class="note-meta">
+                <span class="note-author">{{ n.staff_name || '客服' }}</span>
+                <span class="note-time">{{ formatDate(n.created_at) }}</span>
+                <div class="note-actions">
+                  <button class="note-act-btn" (click)="startEdit(n)" title="編輯">✏️</button>
+                  <button class="note-act-btn danger" (click)="deleteNote(n)" title="刪除">🗑</button>
+                </div>
+              </div>
+            </ng-container>
+
+            <!-- 編輯模式 -->
+            <ng-container *ngIf="editingNoteId === n.id">
+              <textarea class="note-edit-input" [(ngModel)]="editingNoteDraft"
+                        rows="3" placeholder="編輯筆記…"></textarea>
+              <div class="note-edit-actions">
+                <button class="chip-btn" (click)="cancelEdit()">取消</button>
+                <button class="full-btn primary sm" (click)="saveEdit(n)"
+                        [disabled]="!editingNoteDraft.trim()">儲存</button>
+              </div>
+            </ng-container>
+          </div>
+        </div>
+
+        <!-- 新增筆記 -->
+        <div class="note-composer">
+          <textarea class="note-input" [(ngModel)]="noteDraft"
+                    placeholder="新增筆記… (Enter 送出，Shift+Enter 換行)"
+                    (keydown)="onNoteEnter($event)"
+                    rows="3">
+          </textarea>
+          <button class="full-btn primary" (click)="submitNote()"
+                  [disabled]="!noteDraft.trim() || noteSubmitting">
+            {{ noteSubmitting ? '新增中…' : '➕ 新增筆記' }}
+          </button>
+        </div>
+
+      </ng-container>
     </div>
 
-    <!-- 歷史 -->
+    <!-- ── 歷史 Tab ── -->
     <div class="drawer-body" *ngIf="rightTab==='history'">
       <div class="empty-hint" *ngIf="!sessionHistory.length">尚無記錄</div>
       <div class="history-row" *ngFor="let h of sessionHistory">

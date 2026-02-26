@@ -13,7 +13,7 @@ import { AdminApiService }   from '../../Service/api/admin-api.service';
 import { AdminTokenService } from '../../Service/auth/admin-token.service';
 import {
   TicketMessage, SessionHistory, AllowedNext,
-  Booking, BookingForm,
+  CustomerNote,
   SessionStatus, SESSION_STATUS_LABEL, SESSION_STATUS_COLOR,
 } from '../../Service/api/models';
 
@@ -35,6 +35,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   errorMsg     = '';
   draft        = '';
   customerName = '';
+  customerId: number | null = null;
 
   // ── 訊息 ────────────────────────────────────────────────
   items: TicketMessage[] = [];
@@ -49,23 +50,21 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
 
   // ── 右側抽屜 ────────────────────────────────────────────
   showPanel = false;
-  rightTab: 'status' | 'booking' | 'history' = 'status';
+  rightTab: 'status' | 'notes' | 'history' = 'status';
 
-  // ── 報名 ────────────────────────────────────────────────
-  booking: Booking | null = null;
-  bookingForm: BookingForm = {
-    name: '', phone: '', email: '',
-    course_item: '', booking_date: '', note: '',
-  };
-  bookingSaving  = false;
-  bookingSuccess = false;
+  // ── 筆記 ────────────────────────────────────────────────
+  notes: CustomerNote[]  = [];
+  noteDraft              = '';
+  noteSubmitting         = false;
+  editingNoteId: number | null = null;
+  editingNoteDraft       = '';
 
   // ── Viewer ──────────────────────────────────────────────
   viewerOpen = false;
   viewerSrc  = '';
   viewerName = '';
 
-  // ── 媒體快取（原有邏輯保留）──────────────────────────────
+  // ── 媒體快取 ─────────────────────────────────────────────
   private mediaCache   = new Map<string, string>();
   private mediaLoading = new Set<string>();
 
@@ -120,7 +119,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   loadAll() {
     this.refresh();
     this.loadStatus();
-    this.loadBooking();
+    this.loadNotes();
     this.loadHistory();
   }
 
@@ -132,8 +131,6 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         this.items   = rows || [];
         this.loading = false;
         this.shouldScrollBottom = true;
-
-        // 從最新一筆 in 訊息抓發送者名稱顯示在頂部
         const lastIn = [...this.items].reverse().find(m => m.direction === 'in');
         if (lastIn?.sender_name) this.customerName = lastIn.sender_name;
       },
@@ -155,20 +152,11 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     });
   }
 
-  loadBooking() {
-    this.api.getBooking(this.ticketId).subscribe({
-      next: b => {
-        this.booking = b;
-        if (b) {
-          this.bookingForm = {
-            name:         b.name         ?? '',
-            phone:        b.phone        ?? '',
-            email:        b.email        ?? '',
-            course_item:  b.course_item  ?? '',
-            booking_date: b.booking_date ?? '',
-            note:         b.booking_note ?? '',
-          };
-        }
+  loadNotes() {
+    this.api.getNotes(this.ticketId).subscribe({
+      next: res => {
+        this.customerId = res.customer_id;
+        this.notes      = res.items ?? [];
       },
     });
   }
@@ -201,9 +189,9 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     const text = (this.draft || '').trim();
     if (!text || this.sending) return;
 
-    const backup = text;
-    this.draft   = '';
-    this.sending = true;
+    const backup  = text;
+    this.draft    = '';
+    this.sending  = true;
     this.errorMsg = '';
 
     this.api.reply(this.ticketId, text).subscribe({
@@ -256,35 +244,63 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     });
   }
 
-  // ── 報名 ─────────────────────────────────────────────────
+  // ── 筆記 ─────────────────────────────────────────────────
 
-  saveBooking() {
-    this.bookingSaving  = true;
-    this.bookingSuccess = false;
-    this.api.upsertBooking(this.ticketId, this.bookingForm).subscribe({
+  submitNote() {
+    const text = (this.noteDraft || '').trim();
+    if (!text || this.noteSubmitting) return;
+    this.noteSubmitting = true;
+    this.api.createNote(this.ticketId, text).subscribe({
       next: () => {
-        this.bookingSaving  = false;
-        this.bookingSuccess = true;
-        this.loadBooking();
-        this.loadStatus();
-        setTimeout(() => this.bookingSuccess = false, 2000);
+        this.noteDraft      = '';
+        this.noteSubmitting = false;
+        this.loadNotes();
       },
       error: () => {
-        this.bookingSaving = false;
-        this.errorMsg = '儲存報名資料失敗';
+        this.noteSubmitting = false;
+        this.errorMsg = '新增筆記失敗';
       },
     });
   }
 
-  confirmBooking() {
-    if (!confirm('確認報名並自動結案？')) return;
-    this.api.confirmBooking(this.ticketId, 'confirmed').subscribe({
-      next:  () => this.router.navigateByUrl('/admin/turn'),
-      error: () => this.errorMsg = '確認報名失敗',
+  startEdit(n: CustomerNote) {
+    this.editingNoteId    = n.id;
+    this.editingNoteDraft = n.note;
+  }
+
+  cancelEdit() {
+    this.editingNoteId    = null;
+    this.editingNoteDraft = '';
+  }
+
+  saveEdit(n: CustomerNote) {
+    const text = (this.editingNoteDraft || '').trim();
+    if (!text) return;
+    this.api.updateNote(this.ticketId, n.id, text).subscribe({
+      next: () => {
+        this.cancelEdit();
+        this.loadNotes();
+      },
+      error: () => this.errorMsg = '更新筆記失敗',
     });
   }
 
-  // ── 訊息類型（原有邏輯保留）──────────────────────────────
+  deleteNote(n: CustomerNote) {
+    if (!confirm('確定刪除這則筆記？')) return;
+    this.api.deleteNote(this.ticketId, n.id).subscribe({
+      next:  () => this.loadNotes(),
+      error: () => this.errorMsg = '刪除筆記失敗',
+    });
+  }
+
+  onNoteEnter(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.submitNote();
+    }
+  }
+
+  // ── 訊息類型 ─────────────────────────────────────────────
 
   bodyType(m: any): 'image' | 'video' | 'audio' | 'file' | 'sticker' | 'text' {
     const t = (m?.message_type || '').trim();
@@ -301,7 +317,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     return (m?.text || '').toString();
   }
 
-  // ── 媒體（原有邏輯保留）──────────────────────────────────
+  // ── 媒體 ─────────────────────────────────────────────────
 
   mediaSrc(m: any): string | null {
     const url = (m?.content_url || '').trim();
@@ -369,10 +385,22 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
 
   // ── 工具 ─────────────────────────────────────────────────
 
-  onAvatarError(m: any) { m.sender_picture_url = null; }
+  onAvatarError(m: any) {
+    m.sender_picture_url = null; 
+    m.picture_url = null; 
+  }
 
+  getPictureUrl(m: any): string | null {
+    // 相容各種欄位名稱（含空格版本）
+    return m.sender_picture_url
+        || m['sender picture url']
+        || m.picture_url
+        || m.user_picture_url
+        || null;
+  }
+  
   onImageError(ev: Event) {
-    (ev.target as HTMLImageElement).style.display = 'none';
+    (ev.target as HTMLImageElement).style.display = 'none'; 
   }
 
   formatTime(iso: string): string {
@@ -380,8 +408,15 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     return new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
   }
 
+  formatDate(iso: string): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+  }
+
   get statusColor(): string { return SESSION_STATUS_COLOR[this.currentStatus] ?? '#9E9E9E'; }
   get statusLabel(): string { return SESSION_STATUS_LABEL[this.currentStatus] ?? this.currentStatus; }
 
   trackById(_: number, m: TicketMessage) { return m.id; }
+  trackNoteById(_: number, n: CustomerNote) { return n.id; }
 }

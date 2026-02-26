@@ -4,13 +4,14 @@ import json
 import hmac
 import base64
 import hashlib
+import mimetypes
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 import requests
 import pymysql
 from fastapi import APIRouter, Request, Header, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, FileResponse
 
 # ----------------------------
 # ENV
@@ -25,6 +26,20 @@ DB_NAME = os.environ.get("DB_NAME", "iDiving_LineTest")
 
 LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+
+LINE_CONTENT_DIR = os.environ.get("LINE_CONTENT_DIR", "/app/data/line_content").strip() or "/app/data/line_content"
+
+_MIME_EXT = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "video/mp4": ".mp4",
+    "audio/mpeg": ".mp3",
+    "audio/mp4": ".m4a",
+    "audio/aac": ".aac",
+    "application/pdf": ".pdf",
+}
 
 # ----------------------------
 # Router
@@ -135,62 +150,91 @@ def refresh_group_or_room_cache(event: dict):
         return
     return
 
-def insert_message_raw_if_any(conn, event: dict, event_id: str):
-    """
-    最小版：只處理 message 事件，把 text/image/sticker 的基本資料塞 messages_raw
-    """
+def insert_message_raw_if_any(conn, event: dict, event_id: str, conversation_id: int, ticket_id: int):
     if event.get("type") != "message":
         return
 
     msg = event.get("message") or {}
-    mtype = msg.get("type")
-    line_message_id = msg.get("id")
+    mtype = (msg.get("type") or "").strip()
+    line_message_id = (msg.get("id") or "").strip()
+    if not line_message_id:
+        return
 
     # who said?
-    ctype, cid = _extract_source(event)
     sender_type = "customer"
     sender_name = None
     sender_picture_url = None
 
     text = msg.get("text") if mtype == "text" else None
 
+    # content fields
+    content_path = None
+    content_mime = None
+    content_size = None
+    content_name = None
     content_url = None
+
+    # sticker fields
     sticker_id = None
     package_id = None
     sticker_resource_type = None
+    sticker_url = None
 
     if mtype == "sticker":
         sticker_id = msg.get("stickerId")
         package_id = msg.get("packageId")
         sticker_resource_type = msg.get("stickerResourceType")
+        # sticker_url 你之後如果要組 URL 再補（先留空）
+
+    if mtype in ("image", "video", "audio", "file"):
+        try:
+            data, mime = fetch_line_message_content(line_message_id)
+            content_path, content_size, content_name = save_content_to_disk(line_message_id, data, mime)
+            content_mime = mime
+            # 先把可用 URL 存起來（前端要不要用以後再說）
+            content_url = f"/admin/api/content/{line_message_id}"
+        except Exception as e:
+            print("[WARN] fetch/save content failed:", e, "line_message_id=", line_message_id)
+
+        # file 事件有可能有檔名/檔案大小（有就用）
+        if mtype == "file":
+            fn = (msg.get("fileName") or "").strip()
+            if fn:
+                content_name = fn
+            fs = msg.get("fileSize")
+            if fs and not content_size:
+                try:
+                    content_size = int(fs)
+                except Exception:
+                    pass
 
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO messages_raw
-              (event_id, line_message_id, direction, message_type, text, raw_json,
+              (event_id, conversation_id, ticket_id, line_message_id,
+               direction, message_type, text, raw_json,
+               content_path, content_mime, content_size, content_name, content_url,
+               sticker_id, package_id, sticker_resource_type, sticker_url,
                sender_type, sender_name, sender_picture_url,
-               content_url, sticker_id, package_id, sticker_resource_type,
                created_at)
             VALUES
-              (%s, %s, 'in', %s, %s, %s,
-               %s, %s, %s,
+              (%s, %s, %s, %s,
+               'in', %s, %s, %s,
+               %s, %s, %s, %s, %s,
                %s, %s, %s, %s,
+               %s, %s, %s,
                NOW())
             """,
             (
-                event_id,
-                line_message_id,
-                mtype,
-                text,
-                json.dumps(event, ensure_ascii=False),
-                sender_type,
-                sender_name,
-                sender_picture_url,
-                content_url,
-                sticker_id,
-                package_id,
-                sticker_resource_type,
+                event_id, conversation_id, ticket_id, line_message_id,
+                mtype, text, json.dumps(event, ensure_ascii=False),
+
+                content_path, content_mime, content_size, content_name, content_url,
+
+                sticker_id, package_id, sticker_resource_type, sticker_url,
+
+                sender_type, sender_name, sender_picture_url,
             ),
         )
 
@@ -415,6 +459,41 @@ def insert_line_event(conn, event: dict) -> str:
     return ev_id
 
 
+def _ensure_dir(path: str):
+    os.makedirs(path, exist_ok=True)
+
+def fetch_line_message_content(line_message_id: str) -> tuple[bytes, str]:
+    """
+    LINE: GET /v2/bot/message/{messageId}/content
+    回傳 (bytes, mime)
+    """
+    url = f"https://api-data.line.me/v2/bot/message/{line_message_id}/content"
+    r = requests.get(url, headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}, timeout=30)
+    if r.status_code != 200:
+        raise RuntimeError(f"fetch content failed: {r.status_code} {r.text}")
+    mime = (r.headers.get("Content-Type") or "").split(";")[0].strip() or "application/octet-stream"
+    return r.content, mime
+
+def save_content_to_disk(line_message_id: str, data: bytes, mime: str) -> tuple[str, int, str]:
+    """
+    回傳 (content_path, content_size, content_name)
+    """
+    _ensure_dir(LINE_CONTENT_DIR)
+
+    ext = _MIME_EXT.get(mime)
+    if not ext:
+        ext = mimetypes.guess_extension(mime) or ""
+
+    content_name = f"{line_message_id}{ext}"
+    content_path = os.path.join(LINE_CONTENT_DIR, content_name)
+
+    with open(content_path, "wb") as f:
+        f.write(data)
+
+    return content_path, len(data), content_name
+
+
+
 
 # ----------------------------
 # Your existing business logic (DB insert / conversation / tickets)
@@ -433,6 +512,7 @@ def insert_line_event(conn, event: dict) -> str:
 # ----------------------------
 @router.get("/health")
 async def health():
+    print("\nHello from FastAPI idiving_callback_test in Docker!~~~health~")
     return {"ok": True}
 
 @router.post("/idiving_callback_test")
@@ -450,6 +530,7 @@ async def callback(
     req: Request,
     x_line_signature: str | None = Header(default=None, alias="X-Line-Signature"),
 ):
+    print("\ncallback received, headers:", req.headers)
     raw_body = await req.body()
     signature = x_line_signature or ""
 
@@ -480,15 +561,15 @@ async def callback(
                 # 1) line_events
                 event_id = insert_line_event(conn, event)
 
-                # 2) messages_raw（如果是 message）
-                insert_message_raw_if_any(conn, event, event_id)
-
-                # 3) conversation
+                # 2) conversation
                 conversation_id = get_or_create_conversation(conn, event)
                 touch_conversation(conn, conversation_id)
 
-                # 4) ticket
+                # 3) ticket
                 ticket_id = ensure_ticket_for_conversation(conn, conversation_id, event)
+
+                # 4) messages_raw（如果是 message）— 有 ticket_id 才好查
+                insert_message_raw_if_any(conn, event, event_id, conversation_id, ticket_id)
 
                 conn.commit()
             except Exception:
@@ -506,3 +587,6 @@ async def callback(
             continue
 
     return "OK"
+
+
+
