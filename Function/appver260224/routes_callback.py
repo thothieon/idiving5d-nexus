@@ -490,7 +490,7 @@ def insert_message_raw_if_any(conn, event: dict, event_id: str, conversation_id:
 
 @router.get("/health")
 async def health():
-    return {"ok": True}
+    return {"ok": True, "version": "Line@v260306"}
 
 
 @router.post("/idiving_callback_test")
