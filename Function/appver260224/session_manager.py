@@ -1,12 +1,9 @@
-# app/session_manager.py
+# app/session_manager.py  ── Line@v260306
 # ============================================================
-# 對話狀態機核心邏輯
-# 所有狀態轉移都透過這裡，不要在 routes 裡直接寫 UPDATE tickets
+# 對話狀態機核心邏輯（全面 async）
 # ============================================================
-
 from fastapi import HTTPException
 
-# ── 允許的狀態轉移表 ─────────────────────────────────────────
 VALID_TRANSITIONS: dict[str, list[str]] = {
     "new":         ["waiting", "in_progress", "closed"],
     "waiting":     ["in_progress", "closed"],
@@ -16,7 +13,6 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     "closed":      ["new"],
 }
 
-# 狀態對應的中文說明（給前端顯示用）
 STATUS_LABEL: dict[str, str] = {
     "new":         "新訊息",
     "waiting":     "等待客服",
@@ -27,21 +23,21 @@ STATUS_LABEL: dict[str, str] = {
 }
 
 
-def get_ticket_current_status(conn, ticket_id: int) -> str:
-    with conn.cursor() as cur:
-        cur.execute(
+async def get_ticket_current_status(conn, ticket_id: int) -> str:
+    async with conn.cursor() as cur:
+        await cur.execute(
             "SELECT current_status FROM tickets WHERE id=%s LIMIT 1",
             (ticket_id,)
         )
-        row = cur.fetchone()
+        row = await cur.fetchone()
     return (row["current_status"] if row else "new")
 
 
-def transition_ticket_status(
+async def transition_ticket_status(
     conn,
     ticket_id:    int,
     new_status:   str,
-    triggered_by: str = "system",   # customer / staff / system
+    triggered_by: str = "system",
     staff_id:     int | None = None,
     note:         str | None = None,
 ):
@@ -51,12 +47,12 @@ def transition_ticket_status(
       2. 寫入 conversation_sessions 歷史記錄
     注意：呼叫端負責 commit
     """
-    with conn.cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             "UPDATE tickets SET current_status=%s, updated_at=NOW() WHERE id=%s",
             (new_status, ticket_id)
         )
-        cur.execute(
+        await cur.execute(
             """
             INSERT INTO conversation_sessions
               (ticket_id, status, triggered_by, staff_id, note, created_at)
@@ -67,9 +63,7 @@ def transition_ticket_status(
 
 
 def validate_transition(current: str, new_status: str):
-    """
-    驗證狀態轉移是否合法，不合法直接 raise HTTPException
-    """
+    """同步檢查，不合法直接 raise HTTPException"""
     allowed = VALID_TRANSITIONS.get(current, [])
     if new_status not in allowed:
         raise HTTPException(
@@ -80,28 +74,23 @@ def validate_transition(current: str, new_status: str):
         )
 
 
-def on_customer_message(conn, ticket_id: int):
+async def on_customer_message(conn, ticket_id: int):
     """
     收到客戶訊息時呼叫：自動推進狀態
-      new     → waiting  （有新訊息，等待客服接手）
-      closed  → new      （已結案再來訊，視為新對話開始）
-      其他狀態不自動改變（由客服手動操作）
     注意：呼叫端負責 commit
     """
-    current = get_ticket_current_status(conn, ticket_id)
+    current = await get_ticket_current_status(conn, ticket_id)
 
     if current == "new":
-        transition_ticket_status(
+        await transition_ticket_status(
             conn, ticket_id,
             new_status="waiting",
             triggered_by="customer",
         )
     elif current == "closed":
-        # 結案後又來訊息，重新開啟
-        transition_ticket_status(
+        await transition_ticket_status(
             conn, ticket_id,
             new_status="new",
             triggered_by="customer",
             note="客戶重新發訊，自動重開"
         )
-    # in_progress / collecting / booking / waiting → 不動，只更新時間戳

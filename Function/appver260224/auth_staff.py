@@ -1,24 +1,23 @@
-# app/auth_staff.py
-# ============================================================
-# 改動：移除本地 get_conn()，改從 app.db import
-# ============================================================
+# app/auth_staff.py  ── Line@v260306
 import os
 from fastapi import Header, HTTPException
 
-from app.db import get_conn                          # ← 唯一改動處
+from app.db import get_conn
 from app.security_staff_tokens import sha256_hex
 
 
-def _touch_token_last_used(conn, token_id: int):
+async def _touch_token_last_used(conn, token_id: int):
     try:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE staff_tokens SET last_used_at=NOW() WHERE id=%s", (token_id,))
-        conn.commit()
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE staff_tokens SET last_used_at=NOW() WHERE id=%s", (token_id,)
+            )
+        await conn.commit()
     except Exception:
-        conn.rollback()
+        await conn.rollback()
 
 
-def _load_staff_by_token(raw_token: str):
+async def _load_staff_by_token(raw_token: str):
     token_hash = sha256_hex(raw_token)
 
     sql = """
@@ -38,34 +37,30 @@ def _load_staff_by_token(raw_token: str):
       LIMIT 1
     """
 
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(sql, (token_hash,))
-            row = cur.fetchone()
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(sql, (token_hash,))
+            row = await cur.fetchone()
         if row:
-            _touch_token_last_used(conn, int(row["token_id"]))
+            await _touch_token_last_used(conn, int(row["token_id"]))
         return row
-    finally:
-        conn.close()
 
 
-def get_current_staff(
+async def get_current_staff(
     x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
 ):
     token = (x_admin_token or "").strip()
     if not token:
         raise HTTPException(status_code=401, detail="missing X-Admin-Token")
 
-    row = _load_staff_by_token(token)
+    row = await _load_staff_by_token(token)
     if not row:
         raise HTTPException(status_code=401, detail="invalid/expired token")
     return row
 
 
-def require_admin_staff(
-    staff: dict,
-):
+def require_admin_staff(staff: dict):
+    """同步檢查即可，不需要 DB 操作"""
     if (staff.get("role") or "") != "admin":
         raise HTTPException(status_code=403, detail="admin only")
     return staff

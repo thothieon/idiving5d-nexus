@@ -1,29 +1,24 @@
-# app/routes_admin.py
-# ============================================================
-# 修改清單：
-#   1. 移除重複的 get_emoji endpoint（原本有兩個）
-#   2. 移除本地 get_conn()，改從 app.db import
-# ============================================================
+# app/routes_admin.py  ── Line@v260306
 import json
 import time
 import os
 import io
 import zipfile
-import requests
+import asyncio
+import httpx
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from app.db import get_conn                                          # ← 改這裡
+from app.db import get_conn
 from app.auth_staff import get_current_staff, require_admin_staff
 from app.security_staff_tokens import generate_admin_token, sha256_hex, token_prefix
 from pydantic import BaseModel
 
-# LINE 設定
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
-LINE_PUSH_API   = "https://api.line.me/v2/bot/message/push"
+LINE_PUSH_API    = "https://api.line.me/v2/bot/message/push"
 LINE_CONTENT_DIR = os.environ.get("LINE_CONTENT_DIR", "/app/data/line_content").strip() or "/app/data/line_content"
 LINE_EMOJI_DIR   = os.environ.get("LINE_EMOJI_DIR",   "/app/data/line_emoji").strip()   or "/app/data/line_emoji"
 
@@ -39,26 +34,22 @@ _MIME_EXT = {
 }
 
 router = APIRouter()
-
 DEFAULT_AGENT_NAME = "客服"
 
 
-# ── 工具函式 ────────────────────────────────────────────────
+# ── 工具函式 ─────────────────────────────────────────────────
 
-def line_push(user_id_or_group_id: str, text: str):
+async def line_push(user_id_or_group_id: str, text: str):
     if not LINE_CHANNEL_ACCESS_TOKEN:
         return (500, "LINE_CHANNEL_ACCESS_TOKEN not configured", {})
     payload = {"to": user_id_or_group_id, "messages": [{"type": "text", "text": text}]}
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
     try:
-        r = requests.post(LINE_PUSH_API, json=payload, headers=headers, timeout=10)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(LINE_PUSH_API, json=payload, headers=headers)
         return (r.status_code, r.text, payload)
     except Exception as e:
         return (500, str(e), payload)
-
-
-def _now_str():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _normalize_subject(s: str, max_len: int = 80) -> str:
@@ -70,9 +61,9 @@ def _ensure_dir(p: str):
     os.makedirs(p, exist_ok=True)
 
 
-def _get_ticket(conn, ticket_id: int):
-    with conn.cursor() as cur:
-        cur.execute(
+async def _get_ticket(conn, ticket_id: int):
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             SELECT t.id, t.status, t.priority, t.subject, t.opened_at, t.closed_at,
                    t.last_customer_message_at, t.updated_at, t.channel_id,
@@ -83,50 +74,50 @@ def _get_ticket(conn, ticket_id: int):
             """,
             (ticket_id,),
         )
-        return cur.fetchone()
+        return await cur.fetchone()
 
 
-def _get_active_assignment(conn, ticket_id: int):
-    with conn.cursor() as cur:
-        cur.execute(
+async def _get_active_assignment(conn, ticket_id: int):
+    async with conn.cursor() as cur:
+        await cur.execute(
             "SELECT id, ticket_id, agent_name, status, assigned_at FROM assignments "
             "WHERE ticket_id=%s AND status='active' ORDER BY id DESC LIMIT 1",
             (ticket_id,),
         )
-        return cur.fetchone()
+        return await cur.fetchone()
 
 
-def _assign_if_needed(conn, ticket_id: int, agent_name: str):
-    active = _get_active_assignment(conn, ticket_id)
+async def _assign_if_needed(conn, ticket_id: int, agent_name: str):
+    active = await _get_active_assignment(conn, ticket_id)
     if active:
         return active
-    with conn.cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             "INSERT INTO assignments (ticket_id, agent_name, status, assigned_at, created_at, updated_at) "
             "VALUES (%s, %s, 'active', NOW(), NOW(), NOW())",
             (ticket_id, agent_name),
         )
-    return _get_active_assignment(conn, ticket_id)
+    return await _get_active_assignment(conn, ticket_id)
 
 
-def _release_active_assignment(conn, ticket_id: int):
-    with conn.cursor() as cur:
-        cur.execute(
+async def _release_active_assignment(conn, ticket_id: int):
+    async with conn.cursor() as cur:
+        await cur.execute(
             "UPDATE assignments SET status='released', released_at=NOW(), updated_at=NOW() "
             "WHERE ticket_id=%s AND status='active'",
             (ticket_id,),
         )
 
 
-def _insert_outgoing_message_raw(conn, conversation_id, ticket_id, text, raw_obj, staff_id, staff_name):
+async def _insert_outgoing_message_raw(conn, conversation_id, ticket_id, text, raw_obj, staff_id, staff_name):
     event_id = f"admin_reply_{ticket_id}_{int(time.time())}"
     event_payload = {
         "type": "message", "source": {"type": "staff"},
         "message": {"type": "text", "text": text},
         "meta": {"ticket_id": ticket_id, "conversation_id": conversation_id},
     }
-    with conn.cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO line_events
               (event_id, event_type, source_type, user_id, conversation_id, ticket_id, event_ts, raw_json, created_at)
@@ -136,12 +127,7 @@ def _insert_outgoing_message_raw(conn, conversation_id, ticket_id, text, raw_obj
             (event_id, "message", "staff", None, conversation_id, ticket_id,
              json.dumps(event_payload, ensure_ascii=False)),
         )
-        cur.execute("SELECT COUNT(*) AS c FROM line_events WHERE event_id=%s", (event_id,))
-        chk = cur.fetchone()
-        if not chk or int(chk.get("c", 0)) != 1:
-            raise RuntimeError(f"line_events insert failed, event_id={event_id}")
-
-        cur.execute(
+        await cur.execute(
             """
             INSERT INTO messages_raw
               (event_id, conversation_id, ticket_id, line_message_id,
@@ -156,45 +142,56 @@ def _insert_outgoing_message_raw(conn, conversation_id, ticket_id, text, raw_obj
         return cur.lastrowid
 
 
-def _fill_ticket_subject_if_missing(conn, ticket_id: int):
-    with conn.cursor() as cur:
-        cur.execute("SELECT subject FROM tickets WHERE id=%s LIMIT 1", (ticket_id,))
-        row = cur.fetchone()
+async def _fill_ticket_subject_if_missing(conn, ticket_id: int):
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT subject FROM tickets WHERE id=%s LIMIT 1", (ticket_id,))
+        row = await cur.fetchone()
         if not row or (row.get("subject") or "").strip():
             return
-        cur.execute(
+        await cur.execute(
             "SELECT text FROM messages_raw WHERE ticket_id=%s AND direction='in' "
             "AND message_type='text' AND text IS NOT NULL AND text <> '' ORDER BY id ASC LIMIT 1",
             (ticket_id,),
         )
-        r2 = cur.fetchone()
+        r2 = await cur.fetchone()
         first_text = ((r2.get("text") if r2 else "") or "").strip()
         if first_text:
-            cur.execute("UPDATE tickets SET subject=%s, updated_at=NOW() WHERE id=%s",
-                        (_normalize_subject(first_text), ticket_id))
+            await cur.execute(
+                "UPDATE tickets SET subject=%s, updated_at=NOW() WHERE id=%s",
+                (_normalize_subject(first_text), ticket_id)
+            )
 
 
-def _touch_after_reply(conn, ticket_id: int):
-    with conn.cursor() as cur:
-        cur.execute(
+async def _touch_after_reply(conn, ticket_id: int):
+    async with conn.cursor() as cur:
+        await cur.execute(
             "UPDATE tickets SET status='pending', updated_at=NOW() WHERE id=%s AND status='open'",
             (ticket_id,),
         )
-        cur.execute("UPDATE tickets SET updated_at=NOW() WHERE id=%s", (ticket_id,))
+        await cur.execute("UPDATE tickets SET updated_at=NOW() WHERE id=%s", (ticket_id,))
 
 
-def _fetch_line_content(message_id: str) -> tuple[bytes, str]:
+async def _fetch_line_content(message_id: str) -> tuple[bytes, str]:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN not set")
     url = f"https://api-data.line.me/v2/bot/message/{message_id}/content"
-    r = requests.get(url, headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}, timeout=30)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(url, headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"})
     if r.status_code != 200:
         raise RuntimeError(f"LINE content fetch failed {r.status_code}: {r.text}")
-    mime = (r.headers.get("Content-Type") or "").split(";")[0].strip() or "application/octet-stream"
+    mime = (r.headers.get("content-type") or "").split(";")[0].strip() or "application/octet-stream"
     return r.content, mime
 
 
-def _fetch_line_emoji(product_id: str, emoji_id: str) -> tuple[bytes, str]:
+async def _fetch_line_emoji(product_id: str, emoji_id: str) -> tuple[bytes, str]:
+    """在 executor 裡跑同步的 zip 解析，避免阻塞 event loop"""
+    return await asyncio.get_event_loop().run_in_executor(
+        None, _fetch_line_emoji_sync, product_id, emoji_id
+    )
+
+
+def _fetch_line_emoji_sync(product_id: str, emoji_id: str) -> tuple[bytes, str]:
+    import requests
     direct_candidates = [
         f"https://stickershop.line-scdn.net/sticonshop/v1/sticon/{product_id}/iPhone/{emoji_id}.png",
         f"https://stickershop.line-scdn.net/sticonshop/v1/sticon/{product_id}/iPhone/{emoji_id}.webp",
@@ -237,7 +234,26 @@ def _fetch_line_emoji(product_id: str, emoji_id: str) -> tuple[bytes, str]:
     return data, "image/png"
 
 
-# ── Pydantic Models ─────────────────────────────────────────
+async def _get_customer_id_by_ticket(conn, ticket_id: int) -> int | None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT COALESCE(cu_direct.id, cu_sender.id) AS customer_id
+            FROM tickets t
+            JOIN conversations c ON c.id = t.conversation_id
+            LEFT JOIN customers cu_direct ON cu_direct.line_user_id = c.channel_id
+                                          AND c.channel_type = 'user'
+            LEFT JOIN customers cu_sender ON cu_sender.line_user_id = t.last_sender_user_id
+                                          AND c.channel_type IN ('group', 'room')
+            WHERE t.id = %s LIMIT 1
+            """,
+            (ticket_id,),
+        )
+        row = await cur.fetchone()
+        return row.get("customer_id") if row else None
+
+
+# ── Pydantic Models ──────────────────────────────────────────
 
 class ReplyBody(BaseModel):
     text: str
@@ -261,10 +277,10 @@ class NoteUpdateBody(BaseModel):
     note: str
 
 
-# ── Endpoints ───────────────────────────────────────────────
+# ── Endpoints ────────────────────────────────────────────────
 
 @router.get("/tickets")
-def list_tickets(
+async def list_tickets(
     staff: dict = Depends(get_current_staff),
     status: str = Query(default="open,pending"),
     limit: int = Query(default=50, ge=1, le=200),
@@ -274,10 +290,9 @@ def list_tickets(
     statuses = [s.strip() for s in (status or "").split(",") if s.strip()] or ["open", "pending"]
     placeholders = ",".join(["%s"] * len(statuses))
 
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 f"""
                 SELECT
                   t.id AS ticket_id, t.status, t.priority, t.subject, t.opened_at, t.closed_at,
@@ -309,7 +324,7 @@ def list_tickets(
                 """,
                 (*statuses, limit, offset),
             )
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
 
             if autofill_subject:
                 for r in rows:
@@ -317,26 +332,25 @@ def list_tickets(
                         first_text = (r.get("first_in_text") or "").strip()
                         if first_text:
                             new_subj = _normalize_subject(first_text)
-                            cur.execute("UPDATE tickets SET subject=%s, updated_at=NOW() WHERE id=%s",
-                                        (new_subj, r["ticket_id"]))
+                            await cur.execute(
+                                "UPDATE tickets SET subject=%s, updated_at=NOW() WHERE id=%s",
+                                (new_subj, r["ticket_id"])
+                            )
                             r["subject"] = new_subj
 
-        conn.commit()
+        await conn.commit()
         return {"ok": True, "items": rows, "limit": limit, "offset": offset}
-    finally:
-        conn.close()
 
 
 @router.get("/tickets/{ticket_id}/messages")
-def get_ticket_messages(
+async def get_ticket_messages(
     ticket_id: int,
     staff: dict = Depends(get_current_staff),
     limit: int = Query(default=200, ge=1, le=500),
 ):
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 """
                 SELECT id, conversation_id, ticket_id, direction, message_type, text,
                        content_path, content_mime, content_size, content_name, content_url,
@@ -346,14 +360,12 @@ def get_ticket_messages(
                 """,
                 (ticket_id, limit),
             )
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
         return {"ok": True, "items": rows}
-    finally:
-        conn.close()
 
 
 @router.post("/tickets/{ticket_id}/reply")
-def reply_ticket(ticket_id: int, body: ReplyBody, staff: dict = Depends(get_current_staff)):
+async def reply_ticket(ticket_id: int, body: ReplyBody, staff: dict = Depends(get_current_staff)):
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
@@ -362,9 +374,8 @@ def reply_ticket(ticket_id: int, body: ReplyBody, staff: dict = Depends(get_curr
     staff_id   = int(staff.get("staff_id"))
     staff_name = (staff.get("name") or "客服").strip()
 
-    conn = get_conn()
-    try:
-        ticket = _get_ticket(conn, ticket_id)
+    async with get_conn() as conn:
+        ticket = await _get_ticket(conn, ticket_id)
         if not ticket:
             raise HTTPException(status_code=404, detail="ticket not found")
 
@@ -372,66 +383,51 @@ def reply_ticket(ticket_id: int, body: ReplyBody, staff: dict = Depends(get_curr
         if not channel_id:
             raise HTTPException(status_code=400, detail="ticket has no channel_id")
 
-        _assign_if_needed(conn, ticket_id, agent_name)
-        code, body_text, payload = line_push(channel_id, text)
+        await _assign_if_needed(conn, ticket_id, agent_name)
+        code, body_text, payload = await line_push(channel_id, text)
 
         raw_obj = {"line_push_status": code, "line_push_body": body_text, "payload": payload,
                    "note": body.note, "agent_name": agent_name, "staff_id": staff_id, "staff_name": staff_name}
 
-        _insert_outgoing_message_raw(conn, int(ticket["conversation_id"]), ticket_id, text, raw_obj, staff_id, staff_name)
-        _fill_ticket_subject_if_missing(conn, ticket_id)
-        _touch_after_reply(conn, ticket_id)
-
-        conn.commit()
+        await _insert_outgoing_message_raw(conn, int(ticket["conversation_id"]), ticket_id, text, raw_obj, staff_id, staff_name)
+        await _fill_ticket_subject_if_missing(conn, ticket_id)
+        await _touch_after_reply(conn, ticket_id)
+        await conn.commit()
         return {"ok": True, "line_status": code}
-    except HTTPException:
-        conn.rollback(); raise
-    except Exception as e:
-        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
 
 
 @router.post("/tickets/{ticket_id}/close")
-def close_ticket(ticket_id: int, body: CloseBody, staff: dict = Depends(get_current_staff)):
-    conn = get_conn()
-    try:
-        ticket = _get_ticket(conn, ticket_id)
+async def close_ticket(ticket_id: int, body: CloseBody, staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        ticket = await _get_ticket(conn, ticket_id)
         if not ticket:
             raise HTTPException(status_code=404, detail="ticket not found")
-        with conn.cursor() as cur:
-            cur.execute(
+        async with conn.cursor() as cur:
+            await cur.execute(
                 "UPDATE tickets SET status='closed', closed_at=NOW(), updated_at=NOW() "
                 "WHERE id=%s AND status <> 'closed'",
                 (ticket_id,),
             )
-        _release_active_assignment(conn, ticket_id)
-        conn.commit()
+        await _release_active_assignment(conn, ticket_id)
+        await conn.commit()
         return {"ok": True, "note": body.note}
-    except HTTPException:
-        conn.rollback(); raise
-    except Exception as e:
-        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
 
 
 @router.get("/staff/me")
-def staff_me(staff: dict = Depends(get_current_staff)):
+async def staff_me(staff: dict = Depends(get_current_staff)):
     return {"ok": True, "staff": staff}
 
 
 @router.get("/stats/questions")
-def stats_questions(
+async def stats_questions(
     staff: dict = Depends(get_current_staff),
     days: int = Query(default=7, ge=1, le=60),
     limit: int = Query(default=2000, ge=10, le=20000),
 ):
     require_admin_staff(staff)
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 """
                 SELECT text FROM messages_raw
                 WHERE direction='in' AND message_type='text'
@@ -441,218 +437,154 @@ def stats_questions(
                 """,
                 (days, limit),
             )
-            rows = cur.fetchall()
-        # 詞頻統計（你原本有 extract_question_phrases，請保留引入）
-        phrases = []
-        for r in rows:
-            t = (r.get("text") or "").strip()
-            if t:
-                phrases.append(t)
-        counter: dict[str, int] = {}
-        for p in phrases:
-            counter[p] = counter.get(p, 0) + 1
-        items = [{"phrase": k, "count": v} for k, v in sorted(counter.items(), key=lambda x: x[1], reverse=True)]
-        return {"ok": True, "days": days, "limit": limit, "items": items}
-    finally:
-        conn.close()
+            rows = await cur.fetchall()
+    counter: dict[str, int] = {}
+    for r in rows:
+        t = (r.get("text") or "").strip()
+        if t:
+            counter[t] = counter.get(t, 0) + 1
+    items = [{"phrase": k, "count": v} for k, v in sorted(counter.items(), key=lambda x: x[1], reverse=True)]
+    return {"ok": True, "days": days, "limit": limit, "items": items}
 
 
 @router.post("/staff/tokens/create")
-def staff_token_create(body: TokenCreateBody, staff: dict = Depends(get_current_staff)):
+async def staff_token_create(body: TokenCreateBody, staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
     if body.staff_id <= 0:
         raise HTTPException(status_code=400, detail="staff_id required")
     raw = generate_admin_token()
     th  = sha256_hex(raw)
     tp  = token_prefix(raw)
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 "INSERT INTO staff_tokens (staff_id, token_hash, token_prefix, label) VALUES (%s, %s, %s, %s)",
                 (int(body.staff_id), th, tp, body.label or None),
             )
             token_id = cur.lastrowid
-        conn.commit()
+        await conn.commit()
         return {"ok": True, "token_id": token_id, "token": raw, "token_prefix": tp}
-    finally:
-        conn.close()
 
 
 @router.post("/staff/tokens/revoke")
-def staff_token_revoke(body: TokenRevokeBody, staff: dict = Depends(get_current_staff)):
+async def staff_token_revoke(body: TokenRevokeBody, staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
     if body.token_id <= 0:
         raise HTTPException(status_code=400, detail="token_id required")
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 "UPDATE staff_tokens SET revoked_at=NOW() WHERE id=%s AND revoked_at IS NULL",
                 (int(body.token_id),),
             )
-        conn.commit()
+        await conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
 
 
 @router.get("/staff/{staff_id}/tokens")
-def staff_tokens_list(staff_id: int, staff: dict = Depends(get_current_staff)):
+async def staff_tokens_list(staff_id: int, staff: dict = Depends(get_current_staff)):
     me_staff_id = int(staff["staff_id"])
     if staff.get("role") != "admin" and staff_id != me_staff_id:
         raise HTTPException(status_code=403, detail="forbidden")
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 "SELECT id, token_prefix, label, created_at, last_used_at, revoked_at "
                 "FROM staff_tokens WHERE staff_id=%s ORDER BY id DESC",
                 (staff_id,),
             )
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
         return {"ok": True, "items": rows}
-    finally:
-        conn.close()
 
 
 @router.get("/content/{line_message_id}")
-def get_content(line_message_id: str, staff: dict = Depends(get_current_staff)):
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+async def get_content(line_message_id: str, staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 "SELECT id, content_path, content_mime, content_name FROM messages_raw "
                 "WHERE line_message_id=%s LIMIT 1",
                 (line_message_id,),
             )
-            row = cur.fetchone()
+            row = await cur.fetchone()
 
         if not row:
             raise HTTPException(status_code=404, detail="content not found")
 
         if not row.get("content_path"):
             try:
-                data, mime = _fetch_line_content(line_message_id)
+                data, mime = await _fetch_line_content(line_message_id)
                 _ensure_dir(LINE_CONTENT_DIR)
                 ext   = _MIME_EXT.get(mime, "")
                 fname = f"{line_message_id}{ext}"
                 fpath = os.path.join(LINE_CONTENT_DIR, fname)
                 with open(fpath, "wb") as f:
                     f.write(data)
-                with conn.cursor() as cur:
-                    cur.execute(
+                async with conn.cursor() as cur:
+                    await cur.execute(
                         "UPDATE messages_raw SET content_path=%s, content_mime=%s, content_size=%s, "
                         "content_name=%s, content_url=%s WHERE id=%s",
                         (fpath, mime, len(data), fname, f"/admin/api/content/{line_message_id}", row["id"]),
                     )
-                    conn.commit()
+                await conn.commit()
                 row["content_path"] = fpath
                 row["content_mime"]  = mime
                 row["content_name"]  = fname
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"fetch content failed: {e}")
 
-        return FileResponse(
-            row["content_path"],
-            media_type=row.get("content_mime") or "application/octet-stream",
-            filename=row.get("content_name") or None,
-        )
-    finally:
-        conn.close()
+    return FileResponse(
+        row["content_path"],
+        media_type=row.get("content_mime") or "application/octet-stream",
+        filename=row.get("content_name") or None,
+    )
 
-
-# ── ✅ emoji endpoint（只保留一個，整合兩版最完整的邏輯）──────
 
 @router.get("/emoji/{product_id}/{emoji_id}")
-def get_emoji(product_id: str, emoji_id: str, staff: dict = Depends(get_current_staff)):
-    """
-    LINE emoji 代理：/admin/api/emoji/{product_id}/{emoji_id}
-    策略：先讀本機快取，沒有才去 LINE 抓並存檔。
-    原本有兩個重複 endpoint，現合併為此一個。
-    """
+async def get_emoji(product_id: str, emoji_id: str, staff: dict = Depends(get_current_staff)):
     safe_product = product_id.replace("/", "_").strip()
     safe_emoji   = emoji_id.replace("/", "_").strip()
-
     folder = os.path.join(LINE_EMOJI_DIR, safe_product)
     _ensure_dir(folder)
 
-    # 1) 快取命中
     for ext, mime in [(".png", "image/png"), (".webp", "image/webp"), (".gif", "image/gif")]:
         fpath = os.path.join(folder, f"{safe_emoji}{ext}")
         if os.path.exists(fpath):
-            return FileResponse(
-                fpath, media_type=mime,
-                filename=os.path.basename(fpath),
-                headers={"Cache-Control": "public, max-age=31536000, immutable"},
-            )
+            return FileResponse(fpath, media_type=mime, filename=os.path.basename(fpath),
+                                headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
-    # 2) 快取未命中：從 LINE 抓
     try:
-        data, mime = _fetch_line_emoji(safe_product, safe_emoji)
+        data, mime = await _fetch_line_emoji(safe_product, safe_emoji)
         ext = ".webp" if mime == "image/webp" else (".gif" if mime == "image/gif" else ".png")
         fpath = os.path.join(folder, f"{safe_emoji}{ext}")
         with open(fpath, "wb") as f:
             f.write(data)
-        return FileResponse(
-            fpath, media_type=mime,
-            filename=os.path.basename(fpath),
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
-        )
+        return FileResponse(fpath, media_type=mime, filename=os.path.basename(fpath),
+                            headers={"Cache-Control": "public, max-age=31536000, immutable"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fetch emoji failed: {e}")
 
 
-# ── Customer Notes ───────────────────────────────────────────
-
-def _get_customer_id_by_ticket(conn, ticket_id: int) -> int | None:
-    """從 ticket 找到對應的 customer_id（支援 user / group / room channel）"""
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-              COALESCE(cu_direct.id, cu_sender.id) AS customer_id
-            FROM tickets t
-            JOIN conversations c ON c.id = t.conversation_id
-            LEFT JOIN customers cu_direct ON cu_direct.line_user_id = c.channel_id
-                                          AND c.channel_type = 'user'
-            LEFT JOIN customers cu_sender ON cu_sender.line_user_id = t.last_sender_user_id
-                                          AND c.channel_type IN ('group', 'room')
-            WHERE t.id = %s LIMIT 1
-            """,
-            (ticket_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            return None
-        return row.get("customer_id")
-
+# ── Customer Notes ────────────────────────────────────────────
 
 @router.get("/tickets/{ticket_id}/notes")
-def list_ticket_notes(ticket_id: int, staff: dict = Depends(get_current_staff)):
-    conn = get_conn()
-    try:
-        customer_id = _get_customer_id_by_ticket(conn, ticket_id)
+async def list_ticket_notes(ticket_id: int, staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        customer_id = await _get_customer_id_by_ticket(conn, ticket_id)
         if not customer_id:
             return {"ok": True, "customer_id": None, "items": []}
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, customer_id, staff_id, staff_name, note, created_at, updated_at
-                FROM customer_notes
-                WHERE customer_id = %s
-                ORDER BY id DESC
-                """,
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, customer_id, staff_id, staff_name, note, created_at, updated_at "
+                "FROM customer_notes WHERE customer_id = %s ORDER BY id DESC",
                 (customer_id,),
             )
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
         return {"ok": True, "customer_id": customer_id, "items": rows}
-    finally:
-        conn.close()
 
 
 @router.post("/tickets/{ticket_id}/notes")
-def create_ticket_note(ticket_id: int, body: NoteCreateBody, staff: dict = Depends(get_current_staff)):
+async def create_ticket_note(ticket_id: int, body: NoteCreateBody, staff: dict = Depends(get_current_staff)):
     note_text = (body.note or "").strip()
     if not note_text:
         raise HTTPException(status_code=400, detail="note is required")
@@ -660,193 +592,131 @@ def create_ticket_note(ticket_id: int, body: NoteCreateBody, staff: dict = Depen
     staff_id   = int(staff.get("staff_id"))
     staff_name = (staff.get("name") or "客服").strip()
 
-    conn = get_conn()
-    try:
-        customer_id = _get_customer_id_by_ticket(conn, ticket_id)
+    async with get_conn() as conn:
+        customer_id = await _get_customer_id_by_ticket(conn, ticket_id)
         if not customer_id:
             raise HTTPException(status_code=404, detail="customer not found for this ticket")
-
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO customer_notes (customer_id, staff_id, staff_name, note, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, NOW(), NOW())
-                """,
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "INSERT INTO customer_notes (customer_id, staff_id, staff_name, note, created_at, updated_at) "
+                "VALUES (%s, %s, %s, %s, NOW(), NOW())",
                 (customer_id, staff_id, staff_name, note_text),
             )
             note_id = cur.lastrowid
-        conn.commit()
+        await conn.commit()
         return {"ok": True, "note_id": note_id, "customer_id": customer_id}
-    except HTTPException:
-        conn.rollback(); raise
-    except Exception as e:
-        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
 
 
 @router.put("/tickets/{ticket_id}/notes/{note_id}")
-def update_ticket_note(ticket_id: int, note_id: int, body: NoteUpdateBody, staff: dict = Depends(get_current_staff)):
+async def update_ticket_note(ticket_id: int, note_id: int, body: NoteUpdateBody, staff: dict = Depends(get_current_staff)):
     note_text = (body.note or "").strip()
     if not note_text:
         raise HTTPException(status_code=400, detail="note is required")
 
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            # 只能編輯自己寫的，或 admin 可以編輯全部
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
             if staff.get("role") == "admin":
-                cur.execute(
+                await cur.execute(
                     "UPDATE customer_notes SET note=%s, updated_at=NOW() WHERE id=%s",
                     (note_text, note_id),
                 )
             else:
-                cur.execute(
+                await cur.execute(
                     "UPDATE customer_notes SET note=%s, updated_at=NOW() WHERE id=%s AND staff_id=%s",
                     (note_text, note_id, int(staff.get("staff_id"))),
                 )
             if cur.rowcount == 0:
                 raise HTTPException(status_code=404, detail="note not found or permission denied")
-        conn.commit()
+        await conn.commit()
         return {"ok": True}
-    except HTTPException:
-        conn.rollback(); raise
-    except Exception as e:
-        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
 
 
 @router.delete("/tickets/{ticket_id}/notes/{note_id}")
-def delete_ticket_note(ticket_id: int, note_id: int, staff: dict = Depends(get_current_staff)):
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
+async def delete_ticket_note(ticket_id: int, note_id: int, staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
             if staff.get("role") == "admin":
-                cur.execute("DELETE FROM customer_notes WHERE id=%s", (note_id,))
+                await cur.execute("DELETE FROM customer_notes WHERE id=%s", (note_id,))
             else:
-                cur.execute(
+                await cur.execute(
                     "DELETE FROM customer_notes WHERE id=%s AND staff_id=%s",
                     (note_id, int(staff.get("staff_id"))),
                 )
             if cur.rowcount == 0:
                 raise HTTPException(status_code=404, detail="note not found or permission denied")
-        conn.commit()
+        await conn.commit()
         return {"ok": True}
-    except HTTPException:
-        conn.rollback(); raise
-    except Exception as e:
-        conn.rollback(); raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
 
 
-# ── Profile 補齊 ─────────────────────────────────────────────
+# ── Profile 補齊 ──────────────────────────────────────────────
 
-def _fetch_line_user_profile(user_id: str) -> dict | None:
-    """從 LINE API 取得單一用戶 profile（display_name, picture_url）"""
+async def _fetch_line_user_profile(user_id: str) -> dict | None:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         return None
-    url = f"https://api.line.me/v2/bot/profile/{user_id}"
     try:
-        r = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
-            timeout=10,
-        )
-        if r.status_code == 200:
-            return r.json()
-        return None
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://api.line.me/v2/bot/profile/{user_id}",
+                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            )
+            return r.json() if r.status_code == 200 else None
     except Exception:
         return None
 
 
 @router.post("/customers/sync_profiles")
-def sync_customer_profiles(
+async def sync_customer_profiles(
     staff: dict = Depends(get_current_staff),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    """
-    把 customers 表中 display_name 或 picture_url 為 null 的用戶，
-    逐一向 LINE API 補齊 profile。
-    每次最多處理 limit 筆（避免 rate limit）。
-    """
     require_admin_staff(staff)
-    conn = get_conn()
-    updated = 0
-    failed  = 0
-    skipped = 0
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 """
                 SELECT id, line_user_id FROM customers
                 WHERE (display_name IS NULL OR picture_url IS NULL)
                   AND line_user_id IS NOT NULL
-                  AND line_user_id NOT LIKE %(c_prefix)s
-                  AND line_user_id NOT LIKE %(r_prefix)s
+                  AND line_user_id NOT LIKE 'C%'
+                  AND line_user_id NOT LIKE 'R%'
                 ORDER BY id DESC
-                LIMIT %(limit)s
+                LIMIT %s
                 """,
-                {"c_prefix": "C%", "r_prefix": "R%", "limit": limit},
+                (limit,),
             )
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
 
+        updated = failed = skipped = 0
         for row in rows:
-            cid     = row["id"]
-            user_id = row["line_user_id"]
-            profile = _fetch_line_user_profile(user_id)
+            profile = await _fetch_line_user_profile(row["line_user_id"])
             if not profile:
                 failed += 1
                 continue
-
             dname = (profile.get("displayName") or "").strip() or None
             pic   = (profile.get("pictureUrl")  or "").strip() or None
-
             if not dname and not pic:
                 skipped += 1
                 continue
-
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE customers
-                    SET display_name = COALESCE(%s, display_name),
-                        picture_url  = COALESCE(%s, picture_url),
-                        updated_at   = NOW()
-                    WHERE id = %s
-                    """,
-                    (dname, pic, cid),
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE customers SET display_name=COALESCE(%s, display_name), "
+                    "picture_url=COALESCE(%s, picture_url), updated_at=NOW() WHERE id=%s",
+                    (dname, pic, row["id"]),
                 )
             updated += 1
 
-        conn.commit()
-        return {
-            "ok":      True,
-            "updated": updated,
-            "failed":  failed,
-            "skipped": skipped,
-            "total":   len(rows),
-        }
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
+        await conn.commit()
+        return {"ok": True, "updated": updated, "failed": failed, "skipped": skipped, "total": len(rows)}
 
 
 @router.get("/customers/profile_stats")
-def customer_profile_stats(staff: dict = Depends(get_current_staff)):
-    """查看目前有多少 customer 缺少 profile"""
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS total FROM customers")
-            total = cur.fetchone()["total"]
-            cur.execute(
+async def customer_profile_stats(staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT COUNT(*) AS total FROM customers")
+            total = (await cur.fetchone())["total"]
+            await cur.execute(
                 "SELECT COUNT(*) AS c FROM customers WHERE display_name IS NULL OR picture_url IS NULL"
             )
-            missing = cur.fetchone()["c"]
+            missing = (await cur.fetchone())["c"]
         return {"ok": True, "total": total, "missing_profile": missing, "has_profile": total - missing}
-    finally:
-        conn.close()
