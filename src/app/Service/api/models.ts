@@ -122,6 +122,22 @@ export interface BookingForm {
   note:         string;
 }
 
+// ── Quick Reply ───────────────────────────────────────────────
+export interface QuickReplyButton {
+  label: string;
+  url:   string;
+}
+
+export interface QuickReplyRule {
+  id:         number;
+  keyword:    string;
+  reply_text: string;
+  buttons:    QuickReplyButton[];
+  is_active:  boolean | number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── 客戶筆記 ─────────────────────────────────────────────────
 export interface CustomerNote {
   id:          number;

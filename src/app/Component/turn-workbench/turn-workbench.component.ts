@@ -89,6 +89,10 @@ export class TurnWorkbenchComponent implements OnInit {
     this.router.navigateByUrl(`/admin/tickets/${id}`);
   }
 
+  goQuickReply() {
+    this.router.navigateByUrl('/admin/quickreply');
+  }
+
   filtered(arr: any[], status: string) {
     const q = (this.search || '').trim().toLowerCase();
 
