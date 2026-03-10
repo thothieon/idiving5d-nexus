@@ -1,0 +1,28 @@
+# Angular
+node_modules/
+dist/
+.angular/
+
+# 環境變數（敏感資訊）
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 系統
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Log
+*.log
+core
