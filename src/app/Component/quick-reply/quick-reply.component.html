@@ -1,0 +1,101 @@
+<section class="topbar">
+  <button class="ghost back" (click)="goBack()">← 返回</button>
+  <div class="brand">Quick Reply 管理</div>
+  <button class="ghost" (click)="openCreate()">+ 新增規則</button>
+</section>
+
+<div class="flash success" *ngIf="successMsg">{{ successMsg }}</div>
+<div class="flash error"   *ngIf="errorMsg">{{ errorMsg }}</div>
+
+<!-- 載入中 -->
+<div class="hint" *ngIf="loading">讀取中…</div>
+
+<!-- 規則列表 -->
+<section class="list" *ngIf="!loading">
+  <div class="empty" *ngIf="rules.length === 0">尚無任何 Quick Reply 規則</div>
+
+  <div class="rule-card" *ngFor="let r of rules" [class.inactive]="!r.is_active">
+    <div class="rule-head">
+      <div class="rule-meta">
+        <span class="keyword">{{ r.keyword }}</span>
+        <span class="badge" [class.on]="r.is_active" [class.off]="!r.is_active">
+          {{ r.is_active ? '啟用' : '停用' }}
+        </span>
+      </div>
+      <div class="rule-actions">
+        <button class="ghost sm" (click)="toggleActive(r)">
+          {{ r.is_active ? '停用' : '啟用' }}
+        </button>
+        <button class="ghost sm" (click)="openEdit(r)">編輯</button>
+        <button class="ghost sm danger" (click)="askDelete(r.id)">刪除</button>
+      </div>
+    </div>
+
+    <div class="reply-text">{{ r.reply_text }}</div>
+
+    <div class="btn-list">
+      <div class="btn-chip" *ngFor="let b of r.buttons">
+        <span class="btn-label">{{ b.label }}</span>
+        <span class="btn-url">{{ b.url }}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 刪除確認 -->
+<div class="overlay" *ngIf="confirmDeleteId !== null">
+  <div class="dialog">
+    <div class="dialog-title">確認刪除？</div>
+    <div class="dialog-body">此操作無法復原</div>
+    <div class="dialog-footer">
+      <button class="ghost" (click)="cancelDelete()">取消</button>
+      <button class="ghost danger" (click)="confirmDelete()">刪除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增/編輯表單 -->
+<div class="overlay" *ngIf="showForm">
+  <div class="dialog wide">
+    <div class="dialog-title">{{ editingId !== null ? '編輯規則' : '新增規則' }}</div>
+
+    <div class="form-group">
+      <label>觸發關鍵字</label>
+      <input [(ngModel)]="draft.keyword" placeholder="例：報名" />
+    </div>
+
+    <div class="form-group">
+      <label>回覆文字</label>
+      <textarea [(ngModel)]="draft.reply_text" rows="3" placeholder="例：請選擇您想了解的課程項目"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Quick Reply 按鈕（最多 13 個）</label>
+      <div class="btn-editor" *ngFor="let btn of draft.buttons; let i = index">
+        <input [(ngModel)]="btn.label" placeholder="按鈕文字（最多 20 字）" class="btn-label-input" />
+        <input [(ngModel)]="btn.url" placeholder="連結 URL" class="btn-url-input" />
+        <button class="ghost sm danger" (click)="removeButton(i)">✕</button>
+      </div>
+      <button class="ghost sm" (click)="addButton()" [disabled]="draft.buttons.length >= 13">
+        + 新增按鈕
+      </button>
+    </div>
+
+    <div class="form-group toggle-row">
+      <label>啟用規則</label>
+      <label class="switch">
+        <input type="checkbox" [(ngModel)]="draft.is_active" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="form-error" *ngIf="formError">{{ formError }}</div>
+
+    <div class="dialog-footer">
+      <button class="ghost" (click)="closeForm()" [disabled]="saving">取消</button>
+      <button class="ghost primary" (click)="save()" [disabled]="saving">
+        {{ saving ? '儲存中…' : '儲存' }}
+      </button>
+    </div>
+  </div>
+</div>

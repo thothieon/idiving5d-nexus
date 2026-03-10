@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import { TurnWorkbenchComponent } from './Component/turn-workbench/turn-workbench.component';
 import { TicketDetailComponent } from './Component/ticket-detail/ticket-detail.component';
 import { AdminLoginComponent } from './Component/admin-login/admin-login.component';
+import { QuickReplyComponent } from './Component/quick-reply/quick-reply.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'admin/turn' },
@@ -11,6 +12,7 @@ export const routes: Routes = [
   { path: 'admin/login', component: AdminLoginComponent },
   { path: 'admin/turn', component: TurnWorkbenchComponent },
   { path: 'admin/tickets/:id', component: TicketDetailComponent },
+  { path: 'admin/quickreply', component: QuickReplyComponent },
 
   // fallback
   { path: '**', redirectTo: 'admin/turn' },

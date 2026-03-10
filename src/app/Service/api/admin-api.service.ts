@@ -8,6 +8,7 @@ import {
   TicketMessage, TicketListItem,
   TicketStatusResponse, SessionHistory,
   Booking, BookingForm, CustomerNote,
+  QuickReplyRule, QuickReplyButton,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -171,5 +172,25 @@ export class AdminApiService {
       headers: this.authHeaders(),
       responseType: 'blob',
     });
+  }
+
+  // ── Quick Reply ───────────────────────────────────────────
+
+  listQuickReplyRules(): Observable<QuickReplyRule[]> {
+    return this.http
+      .get<any>(`${this.base}/quickreply/rules`, { headers: this.authHeaders() })
+      .pipe(map(res => res?.items ?? []));
+  }
+
+  createQuickReplyRule(body: { keyword: string; reply_text: string; buttons: QuickReplyButton[]; is_active: boolean }): Observable<any> {
+    return this.http.post(`${this.base}/quickreply/rules`, body, { headers: this.authHeaders() });
+  }
+
+  updateQuickReplyRule(ruleId: number, body: Partial<{ keyword: string; reply_text: string; buttons: QuickReplyButton[]; is_active: boolean }>): Observable<any> {
+    return this.http.put(`${this.base}/quickreply/rules/${ruleId}`, body, { headers: this.authHeaders() });
+  }
+
+  deleteQuickReplyRule(ruleId: number): Observable<any> {
+    return this.http.delete(`${this.base}/quickreply/rules/${ruleId}`, { headers: this.authHeaders() });
   }
 }
