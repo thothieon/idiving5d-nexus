@@ -1,4 +1,4 @@
-import { Component, OnInit, DestroyRef, inject } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -41,7 +41,8 @@ export class TurnWorkbenchComponent implements OnInit {
   constructor(
     private api: AdminApiService,
     private tokenSvc: AdminTokenService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit() {
@@ -75,11 +76,12 @@ export class TurnWorkbenchComponent implements OnInit {
 
         this.dashboard = this.buildDashboard();
         this.loading = false;
+        this.cdr.detectChanges();
       },
       error: (e) => {
         this.loading = false;
         this.errorMsg = '讀取失敗（可能 token 失效或 API 無法連線）';
-        // token 失效就導回登入
+        this.cdr.detectChanges();
         this.router.navigateByUrl('/admin/login');
       }
     });

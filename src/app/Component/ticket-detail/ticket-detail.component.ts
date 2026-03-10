@@ -2,6 +2,7 @@
 import {
   Component, OnInit, OnDestroy, AfterViewChecked,
   ElementRef, ViewChild, inject, DestroyRef,
+  ChangeDetectorRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
@@ -76,6 +77,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     private router:   Router,
     private api:      AdminApiService,
     private tokenSvc: AdminTokenService,
+    private cdr:      ChangeDetectorRef,
   ) {
     this.destroyRef.onDestroy(() => {
       for (const u of this.mediaCache.values()) URL.revokeObjectURL(u);
@@ -133,10 +135,12 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         this.shouldScrollBottom = true;
         const lastIn = [...this.items].reverse().find(m => m.direction === 'in');
         if (lastIn?.sender_name) this.customerName = lastIn.sender_name;
+        this.cdr.detectChanges();
       },
       error: () => {
         this.loading  = false;
         this.errorMsg = '讀取訊息失敗（可能 token 失效或 API 無法連線）';
+        this.cdr.detectChanges();
         this.router.navigateByUrl('/admin/login');
       },
     });
@@ -174,10 +178,13 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
       .pipe(switchMap(() => this.api.getMessages(this.ticketId)))
       .subscribe({
         next: msgs => {
-          if (msgs.length !== this.items.length) {
+          const lastId    = this.items.length ? this.items[this.items.length - 1].id : 0;
+          const newLastId = msgs.length ? msgs[msgs.length - 1].id : 0;
+          if (msgs.length !== this.items.length || lastId !== newLastId) {
             this.items = msgs;
             this.shouldScrollBottom = true;
             this.loadStatus();
+            this.cdr.detectChanges();
           }
         },
       });
