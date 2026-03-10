@@ -1,22 +1,19 @@
-# app/routes_ui.py
+# app/routes_ui.py  ── Line@v260306
 import os
-import pymysql
 from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 
-from app.auth_staff import get_current_staff, get_conn
+from app.auth_staff import get_current_staff
+from app.db import get_conn
 
 router = APIRouter()
 
-# ✅ 你 templates 放哪裡就填哪裡
-# 常見：/app/app/templates 或 /app/templates
 TEMPLATES_DIR = os.environ.get("TEMPLATES_DIR", "app/templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
-# ---------------- UI pages ----------------
 @router.get("/admin/ui")
-def admin_ui_index(
+async def admin_ui_index(
     request: Request,
     staff: dict = Depends(get_current_staff),
 ):
@@ -24,7 +21,7 @@ def admin_ui_index(
 
 
 @router.get("/admin/uiturn_based")
-def admin_uiturn_index_based(
+async def admin_uiturn_index_based(
     request: Request,
     staff: dict = Depends(get_current_staff),
 ):
@@ -32,7 +29,7 @@ def admin_uiturn_index_based(
 
 
 @router.get("/admin/uiturn/t/{ticket_id}")
-def admin_uiturn_ticket(
+async def admin_uiturn_ticket(
     ticket_id: int,
     request: Request,
     staff: dict = Depends(get_current_staff),
@@ -43,41 +40,40 @@ def admin_uiturn_ticket(
     )
 
 
-# ---------------- Admin API (UI needs) ----------------
 @router.get("/admin/api/dashboard")
-def admin_api_dashboard(
-    staff: dict = Depends(get_current_staff),
-):
-    # 原本 Flask 版同樣需要 staff token 才能進 :contentReference[oaicite:4]{index=4}
-    # 這裡直接沿用 staff token 機制即可（不再用 ADMIN_TOKEN，避免跟 X-Admin-Token 衝突）
-
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
+async def admin_api_dashboard(staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
                 """
                 SELECT COUNT(*) AS n
                 FROM tickets
                 WHERE COALESCE(opened_at, created_at) >= DATE_SUB(NOW(), INTERVAL 1 DAY)
                 """
             )
-            today_new = cur.fetchone()["n"]
+            today_new = (await cur.fetchone())["n"]
 
-            cur.execute("SELECT COUNT(*) AS n FROM tickets WHERE status='open'")
-            open_cnt = cur.fetchone()["n"]
+            # ✅ 修正：統一使用 current_status（原本混用 status/current_status）
+            await cur.execute(
+                "SELECT COUNT(*) AS n FROM tickets WHERE current_status='in_progress'"
+            )
+            open_cnt = (await cur.fetchone())["n"]
 
-            cur.execute("SELECT COUNT(*) AS n FROM tickets WHERE status='pending'")
-            pending_cnt = cur.fetchone()["n"]
+            await cur.execute(
+                "SELECT COUNT(*) AS n FROM tickets WHERE current_status='waiting'"
+            )
+            pending_cnt = (await cur.fetchone())["n"]
 
-            cur.execute(
+            await cur.execute(
                 """
                 SELECT COUNT(*) AS n
                 FROM tickets
-                WHERE status IN ('open','pending')
-                  AND COALESCE(last_customer_message_at, opened_at, created_at) < DATE_SUB(NOW(), INTERVAL 60 MINUTE)
+                WHERE current_status NOT IN ('closed')
+                  AND COALESCE(last_customer_message_at, opened_at, created_at)
+                      < DATE_SUB(NOW(), INTERVAL 60 MINUTE)
                 """
             )
-            overdue_60m = cur.fetchone()["n"]
+            overdue_60m = (await cur.fetchone())["n"]
 
         return {
             "ok": True,
@@ -86,5 +82,3 @@ def admin_api_dashboard(
             "pending_count": pending_cnt,
             "overdue_60m": overdue_60m,
         }
-    finally:
-        conn.close()
