@@ -1,5 +1,5 @@
-# Dockerfile
-FROM python:3.10-slim
+# Dockerfile  ── idiving5d-OctoFlow v260310
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,7 +14,6 @@ RUN apt-get update && \
       file \
       libc-bin \
       tzdata \
-      sqlite3 \
       build-essential \
       curl \
     && update-ca-certificates \
@@ -30,19 +29,14 @@ RUN python -m pip install --upgrade pip && \
 
 # 把程式放進容器
 COPY app ./app
-COPY start.sh /start.sh
-RUN sed -i 's/\r$//' /start.sh && chmod +x /start.sh
 
 EXPOSE 5000
 
-ENV FLASK_APP=app.py \
-    FLASK_ENV=development \
-    FLASK_DEBUG=1
-
-
-#CMD ["bash", "-lc", "sleep infinity"]
-# 用 gunicorn 跑 Flask
-# app.main:app = app/main.py 裡的 Flask app 物件名稱叫 app
-CMD ["gunicorn","-w","2","-k","gthread","--threads","8","-b","0.0.0.0:5000","app.main:app"]
-#CMD ["/start.sh"]
-
+# gunicorn + UvicornWorker 跑 FastAPI
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", \
+     "app.main:app", \
+     "-b", "0.0.0.0:5000", \
+     "--workers", "2", \
+     "--timeout", "60", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]

@@ -1,55 +1,84 @@
-# -*- coding: utf-8 
-# bootstrap_admin_token.py
 # -*- coding: utf-8 -*-
+# bootstrap_admin_token.py  â”€â”€ idiving5d-OctoFlow v260310
+#
+# ç”¨æ³•ï¼š
+#   python bootstrap_admin_token.py --staff-id 1 --label bootstrap
+#
+# åŸ·è¡Œå¾Œæœƒå°å‡º RAW_TOKENï¼ŒæŠŠå®ƒæ”¾åˆ° X-Admin-Token header ä½¿ç”¨ã€‚
 import argparse
+import asyncio
+
+import aiomysql
 
 from security_staff_tokens import generate_admin_token, sha256_hex, token_prefix
-from db import get_conn
+
+
+# â”€â”€ DB è¨­å®šï¼ˆç›´æ¥è®€ç’°å¢ƒè®Šæ•¸ï¼Œæˆ– fallback åˆ°é è¨­å€¼ï¼‰â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+import os
+DB_HOST     = os.environ.get("DB_HOST",     "192.168.12.58")
+DB_PORT     = int(os.environ.get("DB_PORT", "3306"))
+DB_USER     = os.environ.get("DB_USER",     "adminuser")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "adminpwd")
+DB_NAME     = os.environ.get("DB_NAME",     "iDiving_Line")
+
+
+async def _insert_token(staff_id: int, label: str) -> str:
+    raw = generate_admin_token()
+    h   = sha256_hex(raw)
+    pfx = token_prefix(raw)
+
+    conn = await aiomysql.connect(
+        host=DB_HOST, port=DB_PORT,
+        user=DB_USER, password=DB_PASSWORD,
+        db=DB_NAME, charset="utf8mb4",
+        cursorclass=aiomysql.DictCursor,
+        autocommit=False,
+    )
+    try:
+        async with conn.cursor() as cur:
+            # ç¢ºèª staff æ˜¯å¦å­˜åœ¨
+            await cur.execute(
+                "SELECT id, role, is_active FROM staff WHERE id=%s LIMIT 1",
+                (staff_id,),
+            )
+            s = await cur.fetchone()
+            if not s:
+                raise RuntimeError(f"staff_id={staff_id} ä¸å­˜åœ¨ staff è¡¨")
+
+            await cur.execute(
+                """
+                INSERT INTO staff_tokens
+                  (staff_id, token_hash, token_prefix, label, created_at)
+                VALUES (%s, %s, %s, %s, NOW())
+                """,
+                (staff_id, h, pfx, label),
+            )
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        conn.close()
+        raise
+    conn.close()
+    return raw, pfx, h
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--staff-id", type=int, required=True, help="­n¸j©wªº admin staff_id¡]staff ªíªº id¡^")
-    ap.add_argument("--label", type=str, default="bootstrap", help="token label¡]¥i¿ï¡^")
+    ap = argparse.ArgumentParser(
+        description="åœ¨ staff_tokens è¡¨æ–°å¢ä¸€çµ„ admin token"
+    )
+    ap.add_argument("--staff-id", type=int, required=True,
+                    help="è¦ç¶å®šçš„ admin staff_idï¼ˆstaff è¡¨çš„ idï¼‰")
+    ap.add_argument("--label", type=str, default="bootstrap",
+                    help="token å‚™è¨»æ¨™ç±¤ï¼ˆå¯é¸ï¼‰")
     args = ap.parse_args()
 
-    raw = generate_admin_token()
-    h = sha256_hex(raw)
-    pfx = token_prefix(raw)
+    raw, pfx, h = asyncio.run(_insert_token(args.staff_id, args.label))
 
-    conn = get_conn()
-    try:
-        with conn.cursor() as cur:
-            # «ØÄ³¶¶«KÀË¬d staff ¬O§_¦s¦b¡]¥i¿ï¡A¦ı«Ü¦³À°§U¡^
-            cur.execute("SELECT id, role, is_active FROM staff WHERE id=%s LIMIT 1", (args.staff_id,))
-            s = cur.fetchone()
-            if not s:
-                raise RuntimeError(f"staff_id={args.staff_id} ¤£¦s¦b©ó staff ªí")
-            # §A­n§óÄY®æ¤]¥i¥HÀË¬d role/is_active
-            # if s.get("role") != "admin" or int(s.get("is_active") or 0) != 1:
-            #     raise RuntimeError(f"staff_id={args.staff_id} ¤£¬O active admin: {s}")
-
-            cur.execute(
-                """
-                INSERT INTO staff_tokens (staff_id, token_hash, token_prefix, label, created_at)
-                VALUES (%s, %s, %s, %s, NOW())
-                """,
-                (args.staff_id, h, pfx, args.label),
-            )
-
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-    print("? INSERT OK")
-    print("RAW_TOKEN =", raw)   # ³o§â­n«O¦s¦n¡]¤§«á¥´ /admin/api/... ¥Î¥¦¡^
+    print("âœ… INSERT OK")
+    print("RAW_TOKEN =", raw)   # é€™å€‹å€¼è¦ä¿å­˜ï¼Œç”¨æ–¼å‘¼å« /admin/api/... çš„ header
     print("PREFIX    =", pfx)
     print("TOKEN_HASH=", h)
 
 
 if __name__ == "__main__":
     main()
-

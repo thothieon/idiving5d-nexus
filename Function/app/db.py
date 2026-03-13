@@ -1,4 +1,4 @@
-# app/db.py  ── Line@v260306
+# app/db.py  ── idiving5d-OctoFlow v260310
 # ============================================================
 # 全面改為 async aiomysql 連線池
 # 啟動時由 main.py lifespan 呼叫 init_db_pool()
@@ -8,10 +8,10 @@ import os
 import aiomysql
 from contextlib import asynccontextmanager
 
-DB_HOST     = os.environ.get("DB_HOST",     "192.168.12.159")
+DB_HOST     = os.environ.get("DB_HOST",     "192.168.12.58")
 DB_PORT     = int(os.environ.get("DB_PORT", "3306"))
-DB_USER     = os.environ.get("DB_USER",     "root")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "rootpwd")
+DB_USER     = os.environ.get("DB_USER",     "adminuser")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "adminpwd")
 DB_NAME     = os.environ.get("DB_NAME",     "iDiving_Line")
 
 _pool: aiomysql.Pool | None = None

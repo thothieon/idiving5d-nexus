@@ -1,4 +1,4 @@
-# app/quick_reply_handler.py  ── Line@v260306
+# app/quick_reply_handler.py  ── idiving5d-OctoFlow v260310
 # ============================================================
 # Quick Reply 核心邏輯
 # - 從 DB 載入規則（帶簡單 in-memory cache，60 秒 TTL）

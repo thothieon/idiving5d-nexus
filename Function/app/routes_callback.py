@@ -1,4 +1,4 @@
-# app/routes_callback.py  ── Line@v260306
+# app/routes_callback.py  ── idiving5d-OctoFlow v260310
 import os
 import json
 import hmac
@@ -286,10 +286,20 @@ async def get_or_create_conversation(conn, event: dict) -> int:
             INSERT INTO conversations
               (channel_type, channel_id, customer_id, created_at, updated_at, last_event_at, last_message_at)
             VALUES (%s, %s, %s, NOW(), NOW(), NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+              last_event_at = NOW(),
+              updated_at    = NOW()
             """,
             (ctype, cid, customer_id),
         )
-        return int(cur.lastrowid)
+        # ON DUPLICATE KEY: lastrowid 在 update 時為 0，需重查
+        if cur.lastrowid:
+            return int(cur.lastrowid)
+        await cur.execute(
+            "SELECT id FROM conversations WHERE channel_id=%s LIMIT 1", (cid,)
+        )
+        row = await cur.fetchone()
+        return int(row["id"])
 
 
 async def touch_conversation(conn, conversation_id: int):
@@ -457,7 +467,7 @@ async def _send_quick_reply(channel_id: str, rule: dict):
 
 @router.get("/health")
 async def health():
-    return {"ok": True, "version": "Line@v260306"}
+    return {"ok": True, "version": "idiving5d-OctoFlow v260310"}
 
 
 @router.post("/idiving_callback_test")
@@ -478,6 +488,9 @@ async def callback(
     signature = x_line_signature or ""
 
     if not verify_line_signature(raw_body, signature):
+        import hmac as _hmac, hashlib as _hs, base64 as _b64
+        expected = _b64.b64encode(_hmac.new(LINE_CHANNEL_SECRET.encode(), raw_body, _hs.sha256).digest()).decode()
+        print(f"[DEBUG] sig_recv={signature!r} sig_expect={expected!r} body_len={len(raw_body)}")
         raise HTTPException(status_code=400, detail="Bad signature")
 
     try:

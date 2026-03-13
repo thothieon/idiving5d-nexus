@@ -3,29 +3,39 @@ services:
     build: .
     container_name: docker-linebot
     labels:
-      - "version=Line@v260306"
+      - "version=idiving5d-OctoFlow v260310"
     ports:
       - "5000:5000"
-      
+
     environment:
       TZ: "Asia/Taipei"
       PORT: "5000"
       WEB_CONCURRENCY: "2"
       GUNICORN_TIMEOUT: "60"
 
-      # === 管理後台驗證（你要新增這行）===
+      # === 管理後台驗證 ===
       ADMIN_TOKEN: "eZ5K0xUjRJBjlGjTol42wIHKsIHt_jnckQY64NhIez0"
 
+      # === docker-crawler 呼叫內部 API 用的共用 Token ===
+      CRAWLER_SECRET: "divessi-crawler-secret-2026"
+
       # === MySQL 是獨立主機 ===
-      DB_HOST: "192.168.12.159"
+      DB_HOST: "192.168.12.58"
       DB_PORT: "3306"
-      DB_USER: "root"
-      DB_PASSWORD: "rootpwd"
+      DB_USER: "adminuser"
+      DB_PASSWORD: "adminpwd"
       DB_NAME: "iDiving_Line"
 
       # === LINE ===
+      #LINE_CHANNEL_SECRET: "dc20df0dd8bb794cff347adfe115ac46"
       LINE_CHANNEL_SECRET: "a4e54bb892d26c3f4d6f8398a263b5e4"
-      LINE_CHANNEL_ACCESS_TOKEN: "xW38kRqbWDgj+H3uv5ISjDIE2v79Y/IjbR7xqYEiGiOttt5eoiWTbnOgLVNryibWSjyT8Aa7nI8eyGmCpR8Sek6KhjlVzF7lUbFqBBGOU52PzBprIkSnpK26PHtmbCBXU7MIPJVMvtJr7HLKWrTKggdB04t89/1O/w1cDnyilFU="
+      LINE_CHANNEL_ACCESS_TOKEN: "b/B/IlbihPZlBzjjWoNi3pTP3KXy3qC3nWy1IXNM2qHNEy+RNOVxGPbYAHjY9657HdNvJcs16QUaLumxsotfqx0Cf9OdThqcBhti4FLyPacTrV1usFBkwC2kddT/jzSbGSYfcZ5fFmvaBWBbAMwr7QdB04t89/1O/w1cDnyilFU="
+
+      # === 內部 Notify（課程更新推播）===
+      # LINE_TO_ID：要接收通知的 userId / groupId / roomId
+      LINE_NOTIFY_TO_ID: "Ua79fedbceaee4227c31a684d06e2aeef"
+      # NOTIFY_TOKEN：和 checker.py 共用的內部驗證 token
+      NOTIFY_TOKEN: "RsSkNneLP0opeVEoX_nL7fqsFXi42PlMuk3dXcfmtEs"
 
     command: >
       gunicorn -k uvicorn.workers.UvicornWorker
@@ -56,10 +66,7 @@ services:
     container_name: linebot_cloudflared
     depends_on:
       - api
-      - web
     environment:
-      # 在 Cloudflare 建 tunnel 後拿到的 token
       TUNNEL_TOKEN: "eyJhIjoiNTBlMzI0ZjU3MGE4OWQzYWNmMzA3YzAyMGQxNDM4ZjgiLCJ0IjoiNWNjNzdlN2QtMmI2YS00N2IzLTk2NzctMmFlMWQxZTQ1ZTIxIiwicyI6IlhWbGR4QTNndkpidWpVb2FHdGhpbUd3RUJMamdIeVJtQVluTXErTUIwSk09In0="
     command: tunnel --no-autoupdate run --token "eyJhIjoiNTBlMzI0ZjU3MGE4OWQzYWNmMzA3YzAyMGQxNDM4ZjgiLCJ0IjoiNWNjNzdlN2QtMmI2YS00N2IzLTk2NzctMmFlMWQxZTQ1ZTIxIiwicyI6IlhWbGR4QTNndkpidWpVb2FHdGhpbUd3RUJMamdIeVJtQVluTXErTUIwSk09In0="
     restart: unless-stopped
-

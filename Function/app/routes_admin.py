@@ -1,4 +1,4 @@
-# app/routes_admin.py  ── Line@v260306
+# app/routes_admin.py  ── idiving5d-OctoFlow v260310
 import json
 import time
 import os
@@ -243,7 +243,7 @@ async def _get_customer_id_by_ticket(conn, ticket_id: int) -> int | None:
             JOIN conversations c ON c.id = t.conversation_id
             LEFT JOIN customers cu_direct ON cu_direct.line_user_id = c.channel_id
                                           AND c.channel_type = 'user'
-            LEFT JOIN customers cu_sender ON cu_sender.line_user_id = t.last_sender_user_id
+            LEFT JOIN customers cu_sender ON cu_sender.line_user_id = c.channel_id
                                           AND c.channel_type IN ('group', 'room')
             WHERE t.id = %s LIMIT 1
             """,
@@ -293,10 +293,10 @@ async def list_tickets(
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                f"""
+                """
                 SELECT
-                  t.id AS ticket_id, t.status, t.priority, t.subject, t.opened_at, t.closed_at,
-                  t.last_customer_message_at, t.last_sender_user_id,
+                  t.id AS ticket_id, t.status, t.current_status, t.priority, t.subject,
+                  t.opened_at, t.closed_at, t.last_customer_message_at,
                   c.id AS conversation_id, c.channel_type, c.channel_id, c.last_event_at, c.last_message_at,
                   COALESCE(cu_direct.id,           cu_sender.id)           AS customer_id,
                   COALESCE(cu_direct.display_name, cu_sender.display_name) AS display_name,
@@ -315,13 +315,13 @@ async def list_tickets(
                 JOIN conversations c ON c.id=t.conversation_id
                 LEFT JOIN customers cu_direct ON cu_direct.line_user_id=c.channel_id
                                               AND c.channel_type='user'
-                LEFT JOIN customers cu_sender ON cu_sender.line_user_id=t.last_sender_user_id
+                LEFT JOIN customers cu_sender ON cu_sender.line_user_id=c.channel_id
                                               AND c.channel_type IN ('group','room')
                 LEFT JOIN assignments a ON a.ticket_id=t.id AND a.status='active'
                 WHERE t.status IN ({placeholders})
                 ORDER BY COALESCE(t.last_customer_message_at, c.last_message_at, t.opened_at) DESC
                 LIMIT %s OFFSET %s
-                """,
+                """.format(placeholders=placeholders),
                 (*statuses, limit, offset),
             )
             rows = await cur.fetchall()
@@ -511,7 +511,8 @@ async def get_content(line_message_id: str, staff: dict = Depends(get_current_st
         if not row:
             raise HTTPException(status_code=404, detail="content not found")
 
-        if not row.get("content_path"):
+        need_download = not row.get("content_path") or not os.path.exists(row["content_path"])
+        if need_download:
             try:
                 data, mime = await _fetch_line_content(line_message_id)
                 _ensure_dir(LINE_CONTENT_DIR)
@@ -531,7 +532,7 @@ async def get_content(line_message_id: str, staff: dict = Depends(get_current_st
                 row["content_mime"]  = mime
                 row["content_name"]  = fname
             except Exception as e:
-                raise HTTPException(status_code=500, detail=f"fetch content failed: {e}")
+                raise HTTPException(status_code=404, detail=f"content not available: {e}")
 
     return FileResponse(
         row["content_path"],
@@ -668,22 +669,36 @@ async def _fetch_line_user_profile(user_id: str) -> dict | None:
 async def sync_customer_profiles(
     staff: dict = Depends(get_current_staff),
     limit: int = Query(default=50, ge=1, le=200),
+    force: bool = Query(default=False, description="force=true 強制重抓所有人，包含已有資料者"),
 ):
     require_admin_staff(staff)
     async with get_conn() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT id, line_user_id FROM customers
-                WHERE (display_name IS NULL OR picture_url IS NULL)
-                  AND line_user_id IS NOT NULL
-                  AND line_user_id NOT LIKE 'C%'
-                  AND line_user_id NOT LIKE 'R%'
-                ORDER BY id DESC
-                LIMIT %s
-                """,
-                (limit,),
-            )
+            if force:
+                await cur.execute(
+                    """
+                    SELECT id, line_user_id FROM customers
+                    WHERE line_user_id IS NOT NULL
+                      AND line_user_id NOT LIKE 'C%%'
+                      AND line_user_id NOT LIKE 'R%%'
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+            else:
+                await cur.execute(
+                    """
+                    SELECT id, line_user_id FROM customers
+                    WHERE (display_name IS NULL OR picture_url IS NULL)
+                      AND line_user_id IS NOT NULL
+                      AND line_user_id NOT LIKE 'C%%'
+                      AND line_user_id NOT LIKE 'R%%'
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
             rows = await cur.fetchall()
 
         updated = failed = skipped = 0
@@ -699,6 +714,8 @@ async def sync_customer_profiles(
                 continue
             async with conn.cursor() as cur:
                 await cur.execute(
+                    "UPDATE customers SET display_name=%s, picture_url=%s, updated_at=NOW() WHERE id=%s"
+                    if force else
                     "UPDATE customers SET display_name=COALESCE(%s, display_name), "
                     "picture_url=COALESCE(%s, picture_url), updated_at=NOW() WHERE id=%s",
                     (dname, pic, row["id"]),
@@ -707,6 +724,98 @@ async def sync_customer_profiles(
 
         await conn.commit()
         return {"ok": True, "updated": updated, "failed": failed, "skipped": skipped, "total": len(rows)}
+
+
+async def _fetch_line_group_summary(group_id: str) -> dict | None:
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://api.line.me/v2/bot/group/{group_id}/summary",
+                headers={"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"},
+            )
+            return r.json() if r.status_code == 200 else None
+    except Exception:
+        return None
+
+
+@router.post("/channels/sync_groups")
+async def sync_group_channels(
+    staff: dict = Depends(get_current_staff),
+    limit: int = Query(default=50, ge=1, le=200),
+    force: bool = Query(default=False, description="force=true 強制重抓所有群組，包含已有名稱者"),
+):
+    """從 line_channels 中撈出群組 channel，重新從 LINE API 拉取 groupName / pictureUrl"""
+    require_admin_staff(staff)
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            if force:
+                await cur.execute(
+                    """
+                    SELECT channel_id FROM line_channels
+                    WHERE channel_type='group'
+                    ORDER BY updated_at ASC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+            else:
+                await cur.execute(
+                    """
+                    SELECT channel_id FROM line_channels
+                    WHERE channel_type='group'
+                      AND (display_name IS NULL OR picture_url IS NULL)
+                    ORDER BY updated_at ASC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+            rows = await cur.fetchall()
+
+        # 也撈 conversations 裡有 group 但 line_channels 尚未建立的
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT DISTINCT c.channel_id FROM conversations c
+                LEFT JOIN line_channels lc ON lc.channel_id=c.channel_id AND lc.channel_type='group'
+                WHERE c.channel_type='group'
+                  AND lc.channel_id IS NULL
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            missing_rows = await cur.fetchall()
+
+        all_group_ids = list({r["channel_id"] for r in rows} | {r["channel_id"] for r in missing_rows})
+
+        updated = failed = skipped = 0
+        for group_id in all_group_ids:
+            summary = await _fetch_line_group_summary(group_id)
+            if not summary:
+                failed += 1
+                continue
+            gname = (summary.get("groupName") or "").strip() or None
+            pic   = (summary.get("pictureUrl") or "").strip() or None
+            if not gname and not pic:
+                skipped += 1
+                continue
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO line_channels (channel_type, channel_id, display_name, picture_url, updated_at)
+                    VALUES ('group', %s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        display_name = VALUES(display_name),
+                        picture_url  = VALUES(picture_url),
+                        updated_at   = NOW()
+                    """,
+                    (group_id, gname, pic),
+                )
+            updated += 1
+
+        await conn.commit()
+        return {"ok": True, "updated": updated, "failed": failed, "skipped": skipped, "total": len(all_group_ids)}
 
 
 @router.get("/customers/profile_stats")

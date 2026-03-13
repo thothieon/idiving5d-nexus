@@ -1,4 +1,4 @@
-# app/main.py  ── Line@v260306
+# app/main.py  ── idiving5d-OctoFlow v260310
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
@@ -11,6 +11,7 @@ from app.routes_groups     import router as groups_router
 from app.routes_sessions   import router as sessions_router
 from app.routes_notify     import router as notify_router
 from app.routes_quickreply import router as quickreply_router
+from app.routes_crawler    import router as crawler_router
 
 
 @asynccontextmanager
@@ -23,26 +24,27 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="iDiving Linebot",
-    version="260306",
+    title="idiving5d-OctoFlow",
+    version="260310",
     lifespan=lifespan,
 )
 
 app.include_router(callback_router)
-app.include_router(admin_router,     prefix="/admin/api")
+app.include_router(admin_router,      prefix="/admin/api")
 app.include_router(ui_router)
-app.include_router(audiences_router, prefix="/admin/api")
-app.include_router(groups_router,    prefix="/admin/api")
-app.include_router(sessions_router,  prefix="/admin/api")
-app.include_router(notify_router,    prefix="/internal")
+app.include_router(audiences_router,  prefix="/admin/api")
+app.include_router(groups_router,     prefix="/admin/api")
+app.include_router(sessions_router,   prefix="/admin/api")
+app.include_router(notify_router,     prefix="/internal")
 app.include_router(quickreply_router, prefix="/admin/api")
+app.include_router(crawler_router,    prefix="/internal")
 
 
 @app.get("/")
 def index():
-    return "OK - linebotapp is running"
+    return "OK - idiving5d-OctoFlow is running"
 
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "Line@v260306"}
+    return {"ok": True, "version": "idiving5d-OctoFlow v260310"}

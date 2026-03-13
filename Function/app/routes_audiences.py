@@ -1,4 +1,4 @@
-# app/routes_audiences.py  ── Line@v260306
+# app/routes_audiences.py  ── idiving5d-OctoFlow v260310
 # 注意：_run_to_zero_bg 背景執行緒保留同步寫法，
 # 因為它是長跑任務且本身就在獨立 thread，不會阻塞 event loop。
 # 但它對 DB 的操作改為每次呼叫 asyncio.run() 包在 thread 裡執行。
