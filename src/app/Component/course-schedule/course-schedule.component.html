@@ -1,0 +1,118 @@
+<section class="topbar">
+  <button class="ghost back" (click)="goBack()">← 返回</button>
+  <div class="brand">課程排程管理</div>
+  <button class="ghost" (click)="openCreate()">+ 新增排程</button>
+</section>
+
+<div class="flash success" *ngIf="successMsg">{{ successMsg }}</div>
+<div class="flash error"   *ngIf="errorMsg">{{ errorMsg }}</div>
+
+<div class="hint" *ngIf="loading">讀取中…</div>
+
+<section class="page-body" *ngIf="!loading">
+  <!-- 課程分組 -->
+  <div class="course-group" *ngFor="let g of groups">
+    <div class="group-header">
+      <span class="group-dot" [style.background]="g.color"></span>
+      <span class="group-title">{{ g.name }}</span>
+      <button class="ghost sm" (click)="openCreate(g.code)">+ 新增</button>
+    </div>
+
+    <div class="empty-hint" *ngIf="g.items.length === 0">尚無排程</div>
+
+    <div class="sched-list">
+      <div class="sched-card" *ngFor="let s of g.items" [class.inactive]="!s.is_active">
+        <div class="sched-row">
+          <span class="sched-date">
+            {{ s.start_date }}
+            <span *ngIf="s.start_date !== s.end_date"> ～ {{ s.end_date }}</span>
+          </span>
+          <span class="badge" [class.on]="s.is_active" [class.off]="!s.is_active">
+            {{ s.is_active ? '顯示' : '隱藏' }}
+          </span>
+        </div>
+        <div class="sched-name">{{ s.course_name }}</div>
+        <div class="sched-note" *ngIf="s.note">{{ s.note }}</div>
+        <div class="sched-actions">
+          <button class="ghost sm" (click)="toggleActive(s)">{{ s.is_active ? '隱藏' : '顯示' }}</button>
+          <button class="ghost sm" (click)="openEdit(s)">編輯</button>
+          <button class="ghost sm danger" (click)="askDelete(s.id)">刪除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 刪除確認 -->
+<div class="overlay" *ngIf="confirmDeleteId !== null">
+  <div class="dialog">
+    <div class="dialog-title">確認刪除？</div>
+    <div class="dialog-body">此操作無法復原</div>
+    <div class="dialog-footer">
+      <button class="ghost" (click)="cancelDelete()">取消</button>
+      <button class="ghost danger" (click)="confirmDelete()">刪除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增/編輯表單 -->
+<div class="overlay" *ngIf="showForm">
+  <div class="dialog wide">
+    <div class="dialog-title">{{ editingId !== null ? '編輯排程' : '新增排程' }}</div>
+
+    <div class="form-group">
+      <label>課程</label>
+      <select [(ngModel)]="draft.course_code" (ngModelChange)="onCourseCodeChange()">
+        <option value="">請選擇</option>
+        <option *ngFor="let opt of courseOptions" [value]="opt.code">{{ opt.name }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>顯示名稱</label>
+      <input [(ngModel)]="draft.course_name" placeholder="例：DPV 推進器 開課" />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>開課日</label>
+        <input type="date" [(ngModel)]="draft.start_date" />
+      </div>
+      <div class="form-group">
+        <label>結課日</label>
+        <input type="date" [(ngModel)]="draft.end_date" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Calendar 顏色</label>
+      <div class="color-row">
+        <input type="color" [(ngModel)]="draft.color" class="color-picker" />
+        <span class="color-value">{{ draft.color }}</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>備註（選填）</label>
+      <input [(ngModel)]="draft.note" placeholder="例：需攜帶裝備" />
+    </div>
+
+    <div class="form-group toggle-row">
+      <label>在官網顯示</label>
+      <label class="switch">
+        <input type="checkbox" [checked]="draft.is_active === 1"
+               (change)="draft.is_active = $any($event.target).checked ? 1 : 0" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="form-error" *ngIf="formError">{{ formError }}</div>
+
+    <div class="dialog-footer">
+      <button class="ghost" (click)="closeForm()" [disabled]="saving">取消</button>
+      <button class="ghost primary" (click)="save()" [disabled]="saving">
+        {{ saving ? '儲存中…' : '儲存' }}
+      </button>
+    </div>
+  </div>
+</div>

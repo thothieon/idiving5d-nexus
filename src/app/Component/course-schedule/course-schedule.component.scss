@@ -1,0 +1,325 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: #070b12;
+  color: #e5e7eb;
+}
+
+// ── Topbar ─────────────────────────────────────────────────
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #0b0f1a;
+  border-bottom: 1px solid #1f2937;
+}
+
+.brand {
+  font-weight: 900;
+  letter-spacing: .3px;
+}
+
+// ── Buttons ────────────────────────────────────────────────
+
+.ghost {
+  background: transparent;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled { opacity: .5; cursor: default; }
+  &.sm      { padding: 5px 10px; font-size: 12px; }
+  &.back    { border-color: #334155; }
+  &.primary { border-color: #3b82f6; background: rgba(59,130,246,.2); color: #93c5fd; }
+  &.danger  { border-color: rgba(248,113,113,.5); color: #f87171; }
+}
+
+// ── Flash ──────────────────────────────────────────────────
+
+.flash {
+  max-width: 700px;
+  margin: 10px auto 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+
+  &.success { background: rgba(34,197,94,.15);   color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+  &.error   { background: rgba(248,113,113,.12); color: #fca5a5; border: 1px solid rgba(248,113,113,.3); }
+}
+
+.hint {
+  max-width: 700px;
+  margin: 20px auto;
+  padding: 0 14px;
+  color: #94a3b8;
+}
+
+// ── Page Body ──────────────────────────────────────────────
+
+.page-body {
+  max-width: 700px;
+  margin: 14px auto;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+// ── Course Group ───────────────────────────────────────────
+
+.course-group {
+  background: #0b1220;
+  border: 1px solid #1f2a44;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.group-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.group-title {
+  font-weight: 800;
+  font-size: 15px;
+  color: #f0f4ff;
+  flex: 1;
+}
+
+.empty-hint {
+  color: #64748b;
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.sched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// ── Schedule Card ──────────────────────────────────────────
+
+.sched-card {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 10px 12px;
+  transition: opacity .2s;
+
+  &.inactive { opacity: .5; }
+}
+
+.sched-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.sched-date {
+  font-size: 13px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 2px 8px;
+
+  &.on  { background: rgba(34,197,94,.2);  color: #86efac; }
+  &.off { background: rgba(100,116,139,.2); color: #94a3b8; }
+}
+
+.sched-name {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+
+.sched-note {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.sched-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+// ── Overlay / Dialog ───────────────────────────────────────
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.dialog {
+  background: #0d1525;
+  border: 1px solid #1f2a44;
+  border-radius: 20px;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 90dvh;
+  overflow-y: auto;
+
+  &.wide { max-width: 480px; }
+}
+
+.dialog-title {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.dialog-body {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+// ── Form ───────────────────────────────────────────────────
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+  }
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+
+  .form-group { flex: 1; }
+}
+
+.toggle-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+input, select, textarea {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  color: #f0f4ff;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+
+  &::placeholder { color: #475569; }
+  &:focus { border-color: #3b82f6; }
+}
+
+select option { background: #111827; }
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-picker {
+  width: 48px;
+  height: 36px;
+  padding: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.color-value {
+  font-size: 13px;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.form-error {
+  font-size: 13px;
+  color: #f87171;
+  padding: 8px 10px;
+  background: rgba(248,113,113,.1);
+  border-radius: 8px;
+}
+
+// ── Toggle Switch ──────────────────────────────────────────
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+
+  input { opacity: 0; width: 0; height: 0; }
+
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: #374151;
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background .2s;
+
+    &::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform .2s;
+    }
+  }
+
+  input:checked + .slider {
+    background: #3b82f6;
+    &::before { transform: translateX(20px); }
+  }
+}

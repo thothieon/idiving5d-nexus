@@ -23,6 +23,13 @@
       {{ preview() }}
     </div>
 
+    <div class="tag-badges" *ngIf="ticket.tags?.length">
+      <span class="tag-b" *ngFor="let t of (ticket.tags ?? [])"
+            [style.background]="t.color + '25'"
+            [style.border-color]="t.color"
+            [style.color]="t.color">{{ t.name }}</span>
+    </div>
+
     <div class="meta">
       #{{ ticket.ticket_id }} · {{ ticket.channel_type }} · {{ ticket.updated_at }}
     </div>

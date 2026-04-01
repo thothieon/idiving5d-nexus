@@ -10,7 +10,7 @@
     </a>
 
     <div class="topbar-info">
-      <div class="topbar-name">{{ customerName || '客服對話' }}</div>
+      <div class="topbar-name">{{ storedCustomerName || customerName || '客服對話' }}</div>
       <div class="topbar-sub">
         <span class="status-dot" [style.background]="statusColor"></span>
         {{ statusLabel }}
@@ -107,13 +107,15 @@
     <!-- 回覆框 -->
     <div class="reply-bar">
       <textarea class="reply-input" [(ngModel)]="draft"
-                placeholder="輸入回覆… (Enter 送出)"
+                placeholder="輸入回覆… (Enter 送出，Shift+Enter 換行)"
                 (keydown)="onEnter($event)"
-                [disabled]="sending" rows="1">
+                [disabled]="sending" rows="5">
       </textarea>
-      <button class="send-btn" [class.ready]="draft.trim()"
+      <button class="send-btn" [class.ready]="draft.trim() && !sending"
+              [class.sending]="sending"
               (click)="send()" [disabled]="!draft.trim() || sending">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <span *ngIf="sending" class="send-spinner"></span>
+        <svg *ngIf="!sending" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
           <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
         </svg>
       </button>
@@ -133,6 +135,7 @@
       <button [class.active]="rightTab==='status'"  (click)="rightTab='status'">狀態</button>
       <button [class.active]="rightTab==='notes'"   (click)="rightTab='notes'">筆記</button>
       <button [class.active]="rightTab==='history'" (click)="rightTab='history'">歷史</button>
+      <button [class.active]="rightTab==='payment'" (click)="openPaymentTab()">💰 繳費</button>
     </div>
 
     <!-- ── 狀態 Tab ── -->
@@ -159,12 +162,73 @@
     <!-- ── 筆記 Tab ── -->
     <div class="drawer-body notes-body" *ngIf="rightTab==='notes'">
 
-      <!-- 無 customer 提示 -->
+      <!-- 自訂名稱區塊（user / group 均顯示） -->
+      <div class="tag-section">
+        <div class="tag-section-header">
+          <span class="info-label">自訂名稱</span>
+          <button class="tag-edit-btn" *ngIf="!editingCustomerName"
+                  (click)="startEditCustomerName()">編輯</button>
+          <button class="tag-edit-btn" *ngIf="editingCustomerName"
+                  (click)="cancelEditCustomerName()">取消</button>
+        </div>
+
+        <div *ngIf="!editingCustomerName" class="customer-name-display">
+          {{ storedCustomerName || '（未設定）' }}
+        </div>
+
+        <div *ngIf="editingCustomerName" class="customer-name-edit">
+          <input type="text" [(ngModel)]="customerNameDraft"
+                 placeholder="輸入自訂名稱，留空可清除"
+                 (keydown.enter)="saveCustomerName()" />
+          <button class="full-btn primary sm" [disabled]="customerNameSaving"
+                  (click)="saveCustomerName()">
+            {{ customerNameSaving ? '儲存中…' : '儲存' }}
+          </button>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- 無 customer 提示（群組無法新增標籤/筆記） -->
       <div class="empty-hint" *ngIf="customerId === null">
-        無法識別此對話的客戶身份，無法新增筆記
+        群組對話不支援標籤與筆記功能
       </div>
 
       <ng-container *ngIf="customerId !== null">
+
+        <!-- 標籤區塊 -->
+        <div class="tag-section">
+          <div class="tag-section-header">
+            <span class="info-label">客戶標籤</span>
+            <button class="tag-edit-btn" (click)="tagPickerOpen = !tagPickerOpen">
+              {{ tagPickerOpen ? '完成' : '編輯' }}
+            </button>
+          </div>
+
+          <!-- 已套用標籤 -->
+          <div class="tag-row" *ngIf="!tagPickerOpen">
+            <span class="tag-badge" *ngFor="let t of customerTags"
+                  [style.background]="t.color + '30'"
+                  [style.border-color]="t.color"
+                  [style.color]="t.color">{{ t.name }}</span>
+            <span class="empty-hint inline" *ngIf="!customerTags.length">尚無標籤</span>
+          </div>
+
+          <!-- 標籤選擇器 -->
+          <div class="tag-picker" *ngIf="tagPickerOpen">
+            <div class="empty-hint" *ngIf="!allTags.length">尚未建立任何標籤</div>
+            <button class="tag-toggle" *ngFor="let t of allTags"
+                    [class.selected]="isTagSelected(t)"
+                    [style.--tc]="t.color"
+                    [disabled]="tagSaving"
+                    (click)="toggleTag(t)">
+              <span class="tag-dot" [style.background]="t.color"></span>
+              {{ t.name }}
+            </button>
+          </div>
+        </div>
+
+        <hr class="divider" />
 
         <!-- 筆記列表 -->
         <div class="note-list">
@@ -212,6 +276,64 @@
         </div>
 
       </ng-container>
+    </div>
+
+    <!-- ── 繳費 Tab ── -->
+    <div class="drawer-body" *ngIf="rightTab==='payment'">
+
+      <div class="payment-msg" *ngIf="paymentMsg">{{ paymentMsg }}</div>
+      <div class="payment-err" *ngIf="paymentErr">{{ paymentErr }}</div>
+
+      <!-- 建立訂單表單 -->
+      <div class="info-block">
+        <div class="info-label">建立繳費訂單</div>
+        <div class="pay-form">
+          <label>金額（元）*</label>
+          <input type="number" inputmode="numeric" [(ngModel)]="paymentAmount"
+                 placeholder="例：3000" min="1" />
+
+          <label>課程說明</label>
+          <input type="text" [(ngModel)]="paymentDesc"
+                 placeholder="例：OW 開放水域課（選填）" />
+
+          <label>繳費期限</label>
+          <input type="date" [(ngModel)]="paymentDue" />
+
+          <button class="full-btn primary"
+                  [disabled]="paymentSaving || !paymentAmount"
+                  (click)="createPaymentOrder()">
+            {{ paymentSaving ? '建立中…' : '📨 建立並推送給客人' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 訂單列表 -->
+      <div class="info-block">
+        <div class="info-label">訂單記錄</div>
+        <div class="empty-hint" *ngIf="!paymentLoading && !paymentOrders.length">
+          尚無繳費訂單
+        </div>
+        <div class="empty-hint" *ngIf="paymentLoading">載入中…</div>
+
+        <div class="pay-order" *ngFor="let o of paymentOrders">
+          <div class="pay-order-row">
+            <span class="pay-status">{{ paymentStatusLabel(o.status) }}</span>
+            <span class="pay-amount">NT$ {{ o.amount | number }}</span>
+          </div>
+          <div class="pay-order-desc" *ngIf="o.description">{{ o.description }}</div>
+          <div class="pay-order-meta">
+            <span *ngIf="o.due_date">期限：{{ o.due_date }}</span>
+            <span>帳號：{{ o.atm_account }}</span>
+          </div>
+          <div class="pay-order-actions" *ngIf="o.status === 'pending'">
+            <button class="chip-btn small" (click)="verifyOrder(o.id)">✅ 手動核銷</button>
+            <button class="chip-btn small danger" (click)="cancelOrder(o.id)">取消訂單</button>
+          </div>
+          <div class="pay-verified" *ngIf="o.status === 'verified' && o.verified_at">
+            收款確認：{{ formatDate(o.verified_at) }}
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── 歷史 Tab ── -->

@@ -1,35 +1,33 @@
-<section class="topbar">
-  <div class="brand">客服後台</div>
-  <div class="actions">
-    <button class="ghost" (click)="refresh()" [disabled]="loading">刷新</button>
-    <button class="ghost" (click)="goQuickReply()">Quick Reply</button>
-    <button class="ghost" (click)="logout()">清除 Token</button>
-  </div>
-</section>
-
 <section class="dash" *ngIf="dashboard as d">
   <div class="kpi">
     <div class="num">{{ d.today_new }}</div>
-    <div class="label">今日新單</div>
+    <div class="label">今日新增</div>
   </div>
   <div class="kpi">
     <div class="num">{{ d.open_cnt }}</div>
-    <div class="label">輪到我回</div>
+    <div class="label">待處理</div>
   </div>
   <div class="kpi">
     <div class="num">{{ d.pending_cnt }}</div>
-    <div class="label">等客回</div>
+    <div class="label">進行中</div>
   </div>
   <div class="kpi danger">
     <div class="num">{{ d.overdue_60m }}</div>
-    <div class="label">超時 60m</div>
+    <div class="label">超時 60 分</div>
   </div>
 </section>
 
 <section class="controls">
-  <div class="seg">
-    <button [class.active]="mode==='turn'" (click)="setMode('turn')">Turn</button>
-    <button [class.active]="mode==='closed'" (click)="setMode('closed')">Closed</button>
+  <div class="ctrl-row">
+    <div class="seg">
+      <button [class.active]="mode==='turn'" (click)="setMode('turn')">進行中</button>
+      <button [class.active]="mode==='closed'" (click)="setMode('closed')">已結案</button>
+    </div>
+    <div class="ctrl-actions">
+      <button class="ghost" (click)="refresh()" [disabled]="loading">刷新</button>
+      <button class="ghost" *ngIf="isAdmin" (click)="goQuickReply()">Quick Reply</button>
+      <button class="ghost" *ngIf="isAdmin" (click)="openTagModal()">🏷 標籤管理</button>
+    </div>
   </div>
 
   <input [(ngModel)]="search" placeholder="搜尋：客名 / subject / 最後一句 / ticketId" />
@@ -38,7 +36,21 @@
     只看超時 60m
   </label>
 
-  <div class="hint" *ngIf="loading">更新中…</div>
+  <!-- 標籤篩選 -->
+  <div class="tag-filter" *ngIf="allTags.length">
+    <button class="tag-filter-btn" [class.active]="filterTagId === null"
+            (click)="setFilterTag(null)">全部</button>
+    <button class="tag-filter-btn" *ngFor="let t of allTags"
+            [class.active]="filterTagId === t.id"
+            [style.--tc]="t.color"
+            (click)="setFilterTag(t.id)">
+      <span class="tag-dot" [style.background]="t.color"></span>{{ t.name }}
+    </button>
+  </div>
+
+  <div class="hint" *ngIf="loading">
+    <span class="pulse-dot"></span>更新中…
+  </div>
   <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
 </section>
 
@@ -48,14 +60,18 @@
     *ngFor="let t of filtered(openItems, 'open')"
     [ticket]="t"
   ></app-ticket-list-item>
-  <div class="empty" *ngIf="filtered(openItems, 'open').length===0">目前沒有 open</div>
+  <div class="empty" *ngIf="filtered(openItems, 'open').length===0 && !loading">
+    {{ search.trim() ? '找不到符合「' + search.trim() + '」的 open 工單' : '目前沒有 open 工單' }}
+  </div>
 
   <h2 class="mt">等客人回（pending）</h2>
   <app-ticket-list-item
     *ngFor="let t of filtered(pendingItems, 'pending')"
     [ticket]="t"
   ></app-ticket-list-item>
-  <div class="empty" *ngIf="filtered(pendingItems, 'pending').length===0">目前沒有 pending</div>
+  <div class="empty" *ngIf="filtered(pendingItems, 'pending').length===0 && !loading">
+    {{ search.trim() ? '找不到符合「' + search.trim() + '」的 pending 工單' : '目前沒有 pending 工單' }}
+  </div>
 </section>
 
 <section *ngIf="mode==='closed'">
@@ -64,5 +80,43 @@
     *ngFor="let t of filtered(closedItems, 'closed')"
     [ticket]="t"
   ></app-ticket-list-item>
-  <div class="empty" *ngIf="filtered(closedItems, 'closed').length===0">目前沒有 closed</div>
+  <div class="empty" *ngIf="filtered(closedItems, 'closed').length===0 && !loading">
+    {{ search.trim() ? '找不到符合「' + search.trim() + '」的 closed 工單' : '目前沒有 closed 工單' }}
+  </div>
 </section>
+
+<!-- ── 標籤管理 Modal（admin only）──────────────────────── -->
+<div class="modal-overlay" *ngIf="tagModalOpen" (click)="closeTagModal()"></div>
+<div class="modal" *ngIf="tagModalOpen">
+  <div class="modal-header">
+    <span>🏷 標籤管理</span>
+    <button (click)="closeTagModal()">✕</button>
+  </div>
+
+  <!-- 現有標籤 -->
+  <div class="tag-list">
+    <div class="empty-hint" *ngIf="!allTags.length">尚未建立任何標籤</div>
+    <div class="tag-row-item" *ngFor="let t of allTags">
+      <span class="tag-dot" [style.background]="t.color"></span>
+      <span class="tag-name">{{ t.name }}</span>
+      <button class="tag-del-btn" (click)="deleteTag(t)">刪除</button>
+    </div>
+  </div>
+
+  <hr class="modal-divider" />
+
+  <!-- 新增標籤 -->
+  <div class="tag-create">
+    <div class="info-label">新增標籤</div>
+    <div class="tag-create-row">
+      <input type="color" [(ngModel)]="newTagColor" class="color-picker" />
+      <input type="text" [(ngModel)]="newTagName" placeholder="標籤名稱" class="tag-name-input"
+             (keydown.enter)="createTag()" />
+      <button class="primary-sm-btn" [disabled]="!newTagName.trim() || tagSaving"
+              (click)="createTag()">
+        {{ tagSaving ? '…' : '新增' }}
+      </button>
+    </div>
+    <div class="tag-err" *ngIf="tagErr">{{ tagErr }}</div>
+  </div>
+</div>

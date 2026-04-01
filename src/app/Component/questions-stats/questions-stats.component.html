@@ -1,0 +1,38 @@
+<div class="page">
+
+  <div class="page-header">
+    <button class="ghost" (click)="back()">← 返回</button>
+    <h1>客人問題蒐集</h1>
+    <div class="seg">
+      <button
+        *ngFor="let d of dayOptions"
+        [class.active]="days === d"
+        (click)="setDays(d)"
+      >近 {{ d }} 天</button>
+    </div>
+  </div>
+
+  <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+
+  <div class="loading-row" *ngIf="loading">讀取中…</div>
+
+  <div class="empty" *ngIf="!loading && items.length === 0">
+    近 {{ days }} 天內沒有客人訊息紀錄
+  </div>
+
+  <div class="list" *ngIf="!loading && items.length > 0">
+    <div class="meta">共 {{ items.length }} 筆不同訊息</div>
+
+    <div class="item" *ngFor="let item of items; let i = index">
+      <div class="rank">{{ i + 1 }}</div>
+      <div class="content">
+        <div class="phrase">{{ item.phrase }}</div>
+        <div class="bar-wrap">
+          <div class="bar" [style.width.%]="(item.count / maxCount) * 100"></div>
+        </div>
+      </div>
+      <div class="count">{{ item.count }}</div>
+    </div>
+  </div>
+
+</div>

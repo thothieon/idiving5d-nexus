@@ -2,13 +2,13 @@ import { Component, OnInit, DestroyRef, inject, ChangeDetectorRef } from '@angul
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { interval, merge, of } from 'rxjs';
-import { catchError, startWith, switchMap, tap } from 'rxjs/operators';
+import { interval, merge, of, Subject } from 'rxjs';
+import { catchError, switchMap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { AdminApiService } from '../../Service/api/admin-api.service';
 import { AdminTokenService } from '../../Service/auth/admin-token.service';
-import { Dashboard, TicketListItem, TicketStatus } from '../../Service/api/models';
+import { TicketListItem, Tag } from '../../Service/api/models';
 import { TicketListItemComponent } from '../../shared/components/ticket-list-item/ticket-list-item.component';
 
 type Mode = 'turn' | 'closed';
@@ -22,21 +22,32 @@ type Mode = 'turn' | 'closed';
 })
 export class TurnWorkbenchComponent implements OnInit {
   mode: Mode = 'turn';
+  isAdmin = false;
 
   loading = true;
   errorMsg = '';
 
   search = '';
-  onlyOverdue = false;
+  onlyOverdue   = false;
+  filterTagId: number | null = null;
+
+  // ── 標籤管理 ─────────────────────────────────────────────
+  allTags:       Tag[]   = [];
+  tagModalOpen          = false;
+  newTagName            = '';
+  newTagColor           = '#38bdf8';
+  tagSaving             = false;
+  tagErr                = '';
 
   items: any[] = [];
   openItems: any[] = [];
   pendingItems: any[] = [];
   closedItems: any[] = [];
 
-  q = '';
-
   dashboard: any = null;
+
+  private refreshTrigger$ = new Subject<void>();
+  private destroyRef = inject(DestroyRef);
 
   constructor(
     private api: AdminApiService,
@@ -50,41 +61,48 @@ export class TurnWorkbenchComponent implements OnInit {
       this.router.navigateByUrl('/admin/login');
       return;
     }
-    this.refresh();
+    this.isAdmin = this.tokenSvc.isAdmin();
+    this.loadTags();
+
+    merge(of(null), interval(30000), this.refreshTrigger$)
+      .pipe(
+        switchMap(() =>
+          this.api.listTickets({ status: 'open,pending,closed', limit: 200 }).pipe(
+            catchError((err) => {
+              this.loading = false;
+              if (err?.status === 401) {
+                this.tokenSvc.clear();
+                this.router.navigateByUrl('/admin/login');
+              } else {
+                this.errorMsg = '讀取失敗，將自動重試…';
+              }
+              return of(null);
+            })
+          )
+        ),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe((items) => {
+        if (items === null) return;
+        this.items = items || [];
+        this.openItems = this.items.filter(x => x.status === 'open');
+        this.pendingItems = this.items.filter(x => x.status === 'pending');
+        this.closedItems = this.items.filter(x => x.status === 'closed');
+        this.dashboard = this.buildDashboard();
+        this.loading = false;
+        this.cdr.detectChanges();
+      });
   }
 
   setMode(m: Mode) {
     this.mode = m;
   }
 
-  logout() {
-    this.tokenSvc.clear();
-    this.router.navigateByUrl('/admin/login');
-  }
 
   refresh() {
     this.loading = true;
     this.errorMsg = '';
-
-    // 一次拉 open/pending/closed（後端 tickets 支援 status=...）
-    this.api.listTickets({ status: 'open,pending,closed', limit: 200 }).subscribe({
-      next: (items) => {
-        this.items = items || [];
-        this.openItems = this.items.filter(x => x.status === 'open');
-        this.pendingItems = this.items.filter(x => x.status === 'pending');
-        this.closedItems = this.items.filter(x => x.status === 'closed');
-
-        this.dashboard = this.buildDashboard();
-        this.loading = false;
-        this.cdr.detectChanges();
-      },
-      error: (e) => {
-        this.loading = false;
-        this.errorMsg = '讀取失敗（可能 token 失效或 API 無法連線）';
-        this.cdr.detectChanges();
-        this.router.navigateByUrl('/admin/login');
-      }
-    });
+    this.refreshTrigger$.next();
   }
 
   openTicket(id: number) {
@@ -93,6 +111,10 @@ export class TurnWorkbenchComponent implements OnInit {
 
   goQuickReply() {
     this.router.navigateByUrl('/admin/quickreply');
+  }
+
+  goCourses() {
+    this.router.navigateByUrl('/admin/courses');
   }
 
   filtered(arr: any[], status: string) {
@@ -104,6 +126,7 @@ export class TurnWorkbenchComponent implements OnInit {
         if (!q) return true;
         return (
           String(t.ticket_id).includes(q) ||
+          String(t.customer_name || '').toLowerCase().includes(q) ||
           String(t.display_name || '').toLowerCase().includes(q) ||
           String(t.subject || '').toLowerCase().includes(q) ||
           String(t.last_customer_text || t.last_in_text || '').toLowerCase().includes(q)
@@ -112,7 +135,53 @@ export class TurnWorkbenchComponent implements OnInit {
       .filter(t => {
         if (!this.onlyOverdue) return true;
         return this.isOverdue60m(t);
+      })
+      .filter(t => {
+        if (this.filterTagId === null) return true;
+        return (t.tags ?? []).some((tg: Tag) => tg.id === this.filterTagId);
       });
+  }
+
+  // ── 標籤管理 ─────────────────────────────────────────────
+
+  loadTags() {
+    this.api.listTags().subscribe({ next: tags => this.allTags = tags });
+  }
+
+  setFilterTag(id: number | null) {
+    this.filterTagId = this.filterTagId === id ? null : id;
+  }
+
+  openTagModal() { this.tagModalOpen = true; this.tagErr = ''; }
+  closeTagModal() { this.tagModalOpen = false; this.newTagName = ''; this.tagErr = ''; }
+
+  createTag() {
+    const name = (this.newTagName || '').trim();
+    if (!name) return;
+    this.tagSaving = true;
+    this.tagErr    = '';
+    this.api.createTag({ name, color: this.newTagColor }).subscribe({
+      next: () => {
+        this.tagSaving  = false;
+        this.newTagName = '';
+        this.loadTags();
+      },
+      error: e => {
+        this.tagSaving = false;
+        this.tagErr    = e?.error?.detail ?? '建立失敗';
+      },
+    });
+  }
+
+  deleteTag(tag: Tag) {
+    if (!confirm(`確定刪除標籤「${tag.name}」？此標籤將從所有客戶移除。`)) return;
+    this.api.deleteTag(tag.id).subscribe({
+      next: () => {
+        if (this.filterTagId === tag.id) this.filterTagId = null;
+        this.loadTags();
+        this.refreshTrigger$.next();
+      },
+    });
   }
 
   private buildDashboard() {

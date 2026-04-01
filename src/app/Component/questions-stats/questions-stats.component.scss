@@ -1,0 +1,153 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: #070b12;
+  color: #e5e7eb;
+}
+
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+// ── 頁頭 ──────────────────────────────────────────────────
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+
+  h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+  }
+}
+
+.ghost {
+  padding: 7px 14px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+
+  &:hover { color: #e5e7eb; border-color: #475569; }
+}
+
+// ── 天數切換 ───────────────────────────────────────────────
+
+.seg {
+  display: flex;
+  gap: 4px;
+
+  button {
+    padding: 6px 12px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover { color: #e5e7eb; }
+    &.active {
+      background: rgba(59,130,246,.15);
+      border-color: #3b82f6;
+      color: #93c5fd;
+      font-weight: 700;
+    }
+  }
+}
+
+// ── 訊息 ──────────────────────────────────────────────────
+
+.err {
+  color: #f87171;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.loading-row,
+.empty {
+  padding: 40px 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+// ── 清單 ──────────────────────────────────────────────────
+
+.meta {
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0b1220;
+  border: 1px solid #1a2540;
+
+  &:hover { background: #0d1830; }
+}
+
+.rank {
+  min-width: 28px;
+  text-align: right;
+  font-size: 13px;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.phrase {
+  font-size: 14px;
+  word-break: break-all;
+  margin-bottom: 5px;
+}
+
+.bar-wrap {
+  height: 4px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 2px;
+  min-width: 2px;
+  transition: width .3s ease;
+}
+
+.count {
+  min-width: 36px;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  color: #93c5fd;
+  font-variant-numeric: tabular-nums;
+}

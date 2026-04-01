@@ -3,6 +3,15 @@
 // ── 舊有（保留相容）─────────────────────────────────────────
 export type TicketStatus = 'open' | 'pending' | 'closed';
 
+export interface StaffItem {
+  id:         number;
+  name:       string;
+  username:   string | null;
+  role:       'admin' | 'staff';
+  is_active:  number;
+  created_at: string;
+}
+
 export interface Dashboard {
   today_new:   number;
   open_cnt:    number;
@@ -30,6 +39,8 @@ export interface TicketListItem {
   picture_url:                string | null;
   phone:                      string | null;
   active_agent:               string | null;
+  customer_id:                number | null;
+  tags?:                      Tag[];
 }
 
 export interface TicketMessage {
@@ -136,6 +147,54 @@ export interface QuickReplyRule {
   is_active:  boolean | number;
   created_at: string;
   updated_at: string;
+}
+
+// ── LIFF 匯款回報 ────────────────────────────────────────────
+export interface LiffPendingOrder {
+  id:           number;
+  amount:       number;
+  description:  string | null;
+  atm_bank_code: string;
+  atm_account:  string;
+  due_date:     string | null;
+  created_at:   string;
+}
+
+export interface LiffSubmitResult {
+  ok:           boolean;
+  match_status: 'matched' | 'unmatched';
+  message:      string;
+}
+
+// ── 客戶標籤 ─────────────────────────────────────────────────
+export interface Tag {
+  id:    number;
+  name:  string;
+  color: string;
+}
+
+// ── 課程排程 ─────────────────────────────────────────────────
+export interface CourseSchedule {
+  id:          number;
+  course_code: string;
+  course_name: string;
+  start_date:  string;   // YYYY-MM-DD
+  end_date:    string;   // YYYY-MM-DD
+  color:       string;
+  note:        string | null;
+  is_active:   number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CourseScheduleForm {
+  course_code: string;
+  course_name: string;
+  start_date:  string;
+  end_date:    string;
+  color:       string;
+  note:        string;
+  is_active:   number;
 }
 
 // ── 客戶筆記 ─────────────────────────────────────────────────

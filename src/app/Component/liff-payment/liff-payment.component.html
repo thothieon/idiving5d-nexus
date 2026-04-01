@@ -1,0 +1,127 @@
+<div class="liff-wrap">
+
+  <!-- ① 初始化中 -->
+  @if (phase === 'init' || phase === 'loading') {
+    <div class="center-msg">
+      <div class="spinner"></div>
+      <p>載入中…</p>
+    </div>
+  }
+
+  <!-- ② 查無待繳訂單 -->
+  @if (phase === 'empty') {
+    <div class="card">
+      <div class="icon">📋</div>
+      <h2>目前無待繳款項</h2>
+      <p>您目前沒有待繳費的訂單，如有疑問請聯繫客服。</p>
+      <button class="btn-close" (click)="closeLiff()">關閉</button>
+    </div>
+  }
+
+  <!-- ③ 選擇訂單（多筆） -->
+  @if (phase === 'select') {
+    <div class="card">
+      <h2>請選擇要回報的訂單</h2>
+      <p class="sub">您有 {{ orders.length }} 筆待繳款項，請選擇已匯款的那筆：</p>
+      @for (order of orders; track order.id) {
+        <div class="order-item" (click)="selectOrder(order)">
+          <div class="order-title">
+            {{ order.description || '課程費用' }}
+          </div>
+          <div class="order-amount">NT$ {{ order.amount | number }}</div>
+          @if (order.due_date) {
+            <div class="order-due">繳費期限：{{ order.due_date }}</div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ④ 填寫末五碼表單 -->
+  @if (phase === 'form' && selected) {
+    <div class="card">
+      <h2>匯款回報</h2>
+
+      <!-- 訂單資訊 -->
+      <div class="info-box">
+        <div class="info-row">
+          <span class="label">課程</span>
+          <span class="value">{{ selected.description || '課程費用' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">應繳金額</span>
+          <span class="value amount">NT$ {{ selected.amount | number }}</span>
+        </div>
+        @if (selected.due_date) {
+          <div class="info-row">
+            <span class="label">繳費期限</span>
+            <span class="value">{{ selected.due_date }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- 匯款資訊 -->
+      <div class="bank-box">
+        <div class="bank-title">匯款資訊</div>
+        <div class="bank-row"><span>銀行代號</span><span>822</span></div>
+        <div class="bank-row"><span>銀行</span><span>中國信託 士林分行</span></div>
+        <div class="bank-row"><span>戶名</span><span>愛潛水股份有限公司</span></div>
+        <div class="bank-row account"><span>帳號</span><span>285-54009941-9</span></div>
+      </div>
+
+      <!-- 輸入欄位 -->
+      <div class="form-group">
+        <label>轉帳帳號末五碼</label>
+        <input type="text" inputmode="numeric" maxlength="5"
+               placeholder="請輸入 5 位數字"
+               [(ngModel)]="last5" />
+      </div>
+      <div class="form-group">
+        <label>匯款金額（元）</label>
+        <input type="number" inputmode="numeric"
+               placeholder="請輸入金額"
+               [(ngModel)]="amount" />
+      </div>
+
+      @if (errorMsg) {
+        <div class="error-msg">{{ errorMsg }}</div>
+      }
+
+      <div class="btn-row">
+        @if (orders.length > 1) {
+          <button class="btn-back" (click)="backToSelect()">返回</button>
+        }
+        <button class="btn-submit" (click)="submit()">送出確認</button>
+      </div>
+    </div>
+  }
+
+  <!-- ⑤ 送出中 -->
+  @if (phase === 'submitting') {
+    <div class="center-msg">
+      <div class="spinner"></div>
+      <p>提交中，請稍候…</p>
+    </div>
+  }
+
+  <!-- ⑥ 成功 -->
+  @if (phase === 'success') {
+    <div class="card success-card">
+      <div class="icon">✅</div>
+      <h2>回報完成</h2>
+      <p class="result-msg">{{ resultMsg }}</p>
+      <button class="btn-close" (click)="closeLiff()">關閉</button>
+    </div>
+  }
+
+  <!-- ⑦ 錯誤 -->
+  @if (phase === 'error') {
+    <div class="card error-card">
+      <div class="icon">⚠️</div>
+      <h2>發生錯誤</h2>
+      <p>{{ errorMsg }}</p>
+      <button class="btn-close" (click)="closeLiff()">關閉</button>
+    </div>
+  }
+
+</div>

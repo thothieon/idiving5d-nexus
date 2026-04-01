@@ -1,0 +1,133 @@
+<div class="page">
+
+  <!-- 頁頭 -->
+  <div class="page-header">
+    <button class="ghost" (click)="back()">← 返回</button>
+    <h1>帳號管理</h1>
+    <button class="btn-add" (click)="openCreate()">+ 新增帳號</button>
+  </div>
+
+  <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+
+  <!-- 員工列表 -->
+  <div class="table-wrap">
+    <div class="loading-row" *ngIf="loading">讀取中…</div>
+
+    <table *ngIf="!loading">
+      <thead>
+        <tr>
+          <th>姓名</th>
+          <th>帳號</th>
+          <th>角色</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let item of items">
+          <td>{{ item.name }}</td>
+          <td class="mono">{{ item.username ?? '（未設定）' }}</td>
+          <td>
+            <span class="badge" [class.admin]="item.role === 'admin'">
+              {{ roleLabel(item.role) }}
+            </span>
+          </td>
+          <td class="actions">
+            <button class="act" (click)="openEdit(item)">編輯</button>
+            <button class="act" (click)="openPassword(item)">改密碼</button>
+            <button class="act danger" (click)="deleteStaff(item)">刪除</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ── 新增帳號 Dialog ────────────────────────────────── -->
+<div class="overlay" *ngIf="showCreate" (click)="showCreate=false">
+  <div class="dialog" (click)="$event.stopPropagation()">
+    <h2>新增帳號</h2>
+
+    <div class="field">
+      <label>姓名</label>
+      <input type="text" [(ngModel)]="createForm.name" placeholder="王小明" />
+    </div>
+    <div class="field">
+      <label>登入帳號</label>
+      <input type="text" [(ngModel)]="createForm.username" placeholder="username" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>密碼（至少 6 字元）</label>
+      <input type="password" [(ngModel)]="createForm.password" autocomplete="new-password" />
+    </div>
+    <div class="field">
+      <label>角色</label>
+      <select [(ngModel)]="createForm.role">
+        <option value="staff">客服</option>
+        <option value="admin">管理者</option>
+      </select>
+    </div>
+
+    <div class="err" *ngIf="createErr">{{ createErr }}</div>
+
+    <div class="dialog-actions">
+      <button class="ghost" (click)="showCreate=false" [disabled]="creating">取消</button>
+      <button class="btn-submit" (click)="submitCreate()" [disabled]="creating">
+        {{ creating ? '建立中…' : '建立' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 編輯帳號 Dialog ────────────────────────────────── -->
+<div class="overlay" *ngIf="editTarget" (click)="editTarget=null">
+  <div class="dialog" (click)="$event.stopPropagation()">
+    <h2>編輯帳號</h2>
+
+    <div class="field">
+      <label>姓名</label>
+      <input type="text" [(ngModel)]="editForm.name" />
+    </div>
+    <div class="field">
+      <label>登入帳號</label>
+      <input type="text" [(ngModel)]="editForm.username" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>角色</label>
+      <select [(ngModel)]="editForm.role">
+        <option value="staff">客服</option>
+        <option value="admin">管理者</option>
+      </select>
+    </div>
+
+    <div class="err" *ngIf="editErr">{{ editErr }}</div>
+
+    <div class="dialog-actions">
+      <button class="ghost" (click)="editTarget=null" [disabled]="editing">取消</button>
+      <button class="btn-submit" (click)="submitEdit()" [disabled]="editing">
+        {{ editing ? '儲存中…' : '儲存' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 改密碼 Dialog ──────────────────────────────────── -->
+<div class="overlay" *ngIf="pwTarget" (click)="pwTarget=null">
+  <div class="dialog" (click)="$event.stopPropagation()">
+    <h2>重設密碼 — {{ pwTarget!.name }}</h2>
+
+    <div class="field">
+      <label>新密碼（至少 6 字元）</label>
+      <input type="password" [(ngModel)]="newPassword" autocomplete="new-password" />
+    </div>
+
+    <div class="err" *ngIf="pwErr">{{ pwErr }}</div>
+
+    <div class="dialog-actions">
+      <button class="ghost" (click)="pwTarget=null" [disabled]="pwSaving">取消</button>
+      <button class="btn-submit" (click)="submitPassword()" [disabled]="pwSaving">
+        {{ pwSaving ? '儲存中…' : '確認變更' }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -14,7 +14,8 @@ export class TicketListItemComponent {
   @Input({ required: true }) ticket!: TicketListItem;
 
   fallbackAvatar(name: string | null): string {
-    const s = (name ?? '?').trim();
+    // 取第一個非括號、非空白的字元，避免顯示「（」
+    const s = (name ?? '').replace(/^[（(「『【\s]+/, '').trim();
     return s ? s.slice(0, 1).toUpperCase() : '?';
   }
 

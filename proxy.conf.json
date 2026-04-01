@@ -1,0 +1,14 @@
+{
+  "/admin/api": {
+    "target": "https://api.idiving.com.tw",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/liff": {
+    "target": "https://api.idiving.com.tw",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

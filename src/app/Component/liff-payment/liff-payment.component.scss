@@ -1,0 +1,267 @@
+.liff-wrap {
+  min-height: 100vh;
+  background: #f5f5f5;
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  height: fit-content;
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #222;
+  }
+
+  .sub {
+    font-size: .9rem;
+    color: #666;
+    margin: 0 0 16px;
+  }
+
+  .icon {
+    font-size: 2.5rem;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+}
+
+// 訂單選擇
+.order-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+
+  &:hover {
+    border-color: #00c300;
+    background: #f0fff0;
+  }
+
+  .order-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #333;
+  }
+
+  .order-amount {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #00c300;
+    margin-top: 4px;
+  }
+
+  .order-due {
+    font-size: .8rem;
+    color: #999;
+    margin-top: 4px;
+  }
+}
+
+// 訂單資訊
+.info-box {
+  background: #f9f9f9;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: .9rem;
+    padding: 4px 0;
+
+    .label {
+      color: #888;
+    }
+
+    .value {
+      font-weight: 500;
+      color: #333;
+
+      &.amount {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #00c300;
+      }
+    }
+  }
+}
+
+// 銀行資訊
+.bank-box {
+  background: #e8f5e9;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+
+  .bank-title {
+    font-weight: 700;
+    font-size: .9rem;
+    color: #388e3c;
+    margin-bottom: 8px;
+  }
+
+  .bank-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: .88rem;
+    padding: 3px 0;
+    color: #555;
+
+    span:first-child {
+      color: #888;
+      min-width: 60px;
+    }
+
+    span:last-child {
+      font-weight: 500;
+      color: #333;
+    }
+
+    &.account span:last-child {
+      font-family: monospace;
+      font-size: .95rem;
+      letter-spacing: .05em;
+    }
+  }
+}
+
+// 表單
+.form-group {
+  margin-bottom: 16px;
+
+  label {
+    display: block;
+    font-size: .85rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+  }
+
+  input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #ddd;
+    border-radius: 10px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    transition: border-color .2s;
+
+    &:focus {
+      outline: none;
+      border-color: #00c300;
+    }
+  }
+}
+
+.error-msg {
+  background: #fff3f3;
+  color: #c62828;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: .88rem;
+  margin-bottom: 14px;
+}
+
+// 按鈕
+.btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-submit {
+  flex: 1;
+  padding: 14px;
+  background: #00c300;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:active { opacity: .85; }
+}
+
+.btn-back {
+  padding: 14px 18px;
+  background: #f0f0f0;
+  color: #555;
+  border: none;
+  border-radius: 12px;
+  font-size: .95rem;
+  cursor: pointer;
+}
+
+.btn-close {
+  width: 100%;
+  padding: 14px;
+  background: #00c300;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+
+  &:active { opacity: .85; }
+}
+
+// 成功/錯誤
+.success-card {
+  text-align: center;
+  .result-msg {
+    white-space: pre-wrap;
+    font-size: .9rem;
+    color: #444;
+    text-align: left;
+    background: #f9f9f9;
+    border-radius: 10px;
+    padding: 12px;
+    margin: 12px 0;
+  }
+}
+
+.error-card {
+  text-align: center;
+  p { color: #c62828; }
+}
+
+// 載入中
+.center-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 16px;
+
+  p { color: #888; font-size: .9rem; }
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #00c300;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

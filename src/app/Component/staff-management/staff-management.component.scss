@@ -1,0 +1,227 @@
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  color: #e5e7eb;
+}
+
+// ── 頁頭 ──────────────────────────────────────────────────
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+  }
+}
+
+.ghost {
+  padding: 7px 14px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover { color: #e5e7eb; border-color: #475569; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.btn-add {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { background: #2563eb; }
+}
+
+// ── 錯誤訊息 ──────────────────────────────────────────────
+
+.err {
+  color: #f87171;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+// ── 表格 ──────────────────────────────────────────────────
+
+.table-wrap {
+  background: #0b1220;
+  border: 1px solid #1f2a44;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.loading-row {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+thead {
+  background: #0d1830;
+
+  th {
+    padding: 11px 14px;
+    text-align: left;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+}
+
+tbody tr {
+  border-top: 1px solid #1a2540;
+  transition: background .15s;
+
+  &:hover { background: rgba(255,255,255,.03); }
+
+  td {
+    padding: 12px 14px;
+    vertical-align: middle;
+  }
+}
+
+.mono { font-family: monospace; font-size: 13px; }
+
+// ── Badges ────────────────────────────────────────────────
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #1e293b;
+  color: #94a3b8;
+
+  &.admin {
+    background: rgba(59,130,246,.15);
+    color: #93c5fd;
+  }
+}
+
+// ── 操作按鈕 ──────────────────────────────────────────────
+
+.actions {
+  display: flex;
+  gap: 6px;
+}
+
+.act {
+  padding: 5px 11px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover { border-color: #3b82f6; color: #93c5fd; }
+
+  &.danger {
+    &:hover { border-color: #ef4444; color: #fca5a5; }
+  }
+}
+
+// ── Dialog ────────────────────────────────────────────────
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.dialog {
+  width: min(420px, 100%);
+  background: #0b1220;
+  border: 1px solid #1f2a44;
+  border-radius: 18px;
+  padding: 28px 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+
+  h2 {
+    margin: 0 0 20px;
+    font-size: 16px;
+    font-weight: 800;
+  }
+}
+
+.field {
+  margin-bottom: 14px;
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  input, select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+    background: #0a0f1c;
+    color: #e5e7eb;
+    font-size: 14px;
+    outline: none;
+
+    &:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,.2);
+    }
+
+    option { background: #0b1220; }
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.btn-submit {
+  padding: 9px 20px;
+  border: 0;
+  border-radius: 10px;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { background: #2563eb; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}

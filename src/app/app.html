@@ -1,21 +1,33 @@
-<header class="topbar">
-  <div class="brand">
-    <div class="dot"></div>
-    <div class="title">客服後台</div>
-  </div>
+<ng-container *ngIf="!isLiff()">
+  <header class="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div class="title">iDiving NEXUS 客服後台-</div>
+      <span class="user-name">{{ staffName() }}</span>
+    </div>
 
-  <div class="actions">
-    <a routerLink="/admin/turn" class="link">工作台</a>
-    <a routerLink="/admin/login" class="link" [class.warn]="!hasToken()">Token</a>
-    <button class="ghost" *ngIf="hasToken()" (click)="clearToken()">清除</button>
-  </div>
-</header>
+    <div class="actions">
+      <ng-container *ngIf="hasToken(); else notLoggedIn">
+        <a routerLink="/admin/turn" class="link">🎫 客服後台</a>
+        <a routerLink="/admin/questions" class="link" *ngIf="isAdmin()">問題蒐集</a>
+        <a routerLink="/admin/courses" class="link" *ngIf="isAdmin()">課程排程</a>
+        <a routerLink="/admin/staff" class="link" *ngIf="isAdmin()">👥 帳號管理</a>
+        <button class="ghost" (click)="clearToken()">登出</button>
+      </ng-container>
+      <ng-template #notLoggedIn>
+        <a routerLink="/admin/login" class="link warn">請登入</a>
+      </ng-template>
+    </div>
+  </header>
+</ng-container>
 
 <main class="main">
   <router-outlet />
 </main>
 
-<nav class="bottom-nav">
-  <a routerLink="/admin/turn" routerLinkActive="active">工作台</a>
-  <a routerLink="/admin/login" routerLinkActive="active">Token</a>
-</nav>
+<ng-container *ngIf="!isLiff()">
+  <nav class="bottom-nav">
+    <a routerLink="/admin/turn" routerLinkActive="active">工作台</a>
+    <a routerLink="/admin/login" routerLinkActive="active" *ngIf="!hasToken()">登入</a>
+  </nav>
+</ng-container>

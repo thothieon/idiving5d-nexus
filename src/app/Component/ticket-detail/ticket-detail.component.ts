@@ -14,7 +14,7 @@ import { AdminApiService }   from '../../Service/api/admin-api.service';
 import { AdminTokenService } from '../../Service/auth/admin-token.service';
 import {
   TicketMessage, SessionHistory, AllowedNext,
-  CustomerNote,
+  CustomerNote, Tag,
   SessionStatus, SESSION_STATUS_LABEL, SESSION_STATUS_COLOR,
 } from '../../Service/api/models';
 
@@ -51,7 +51,30 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
 
   // ── 右側抽屜 ────────────────────────────────────────────
   showPanel = false;
-  rightTab: 'status' | 'notes' | 'history' = 'status';
+  rightTab: 'status' | 'notes' | 'history' | 'payment' = 'status';
+
+  // ── 繳費訂單 ─────────────────────────────────────────────
+  paymentOrders: any[] = [];
+  paymentLoading = false;
+  paymentAmount  = 0;
+  paymentDesc    = '';
+  paymentDue     = '';
+  paymentSaving  = false;
+  paymentMsg     = '';
+  paymentErr     = '';
+
+  // ── 標籤 ────────────────────────────────────────────────
+  allTags:        Tag[] = [];
+  customerTags:   Tag[] = [];
+  tagPickerOpen         = false;
+  tagSaving             = false;
+
+  // ── 自訂名稱 ─────────────────────────────────────────────
+  storedCustomerName: string | null = null;
+  channelType: string | null = null;
+  editingCustomerName    = false;
+  customerNameDraft      = '';
+  customerNameSaving     = false;
 
   // ── 筆記 ────────────────────────────────────────────────
   notes: CustomerNote[]  = [];
@@ -123,6 +146,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     this.loadStatus();
     this.loadNotes();
     this.loadHistory();
+    this.loadAllTags();
   }
 
   refresh() {
@@ -137,11 +161,15 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         if (lastIn?.sender_name) this.customerName = lastIn.sender_name;
         this.cdr.detectChanges();
       },
-      error: () => {
+      error: (err) => {
         this.loading  = false;
-        this.errorMsg = '讀取訊息失敗（可能 token 失效或 API 無法連線）';
+        if (err?.status === 401) {
+          this.tokenSvc.clear();
+          this.router.navigateByUrl('/admin/login');
+        } else {
+          this.errorMsg = '讀取訊息失敗，請重新整理頁面';
+        }
         this.cdr.detectChanges();
-        this.router.navigateByUrl('/admin/login');
       },
     });
   }
@@ -159,8 +187,65 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   loadNotes() {
     this.api.getNotes(this.ticketId).subscribe({
       next: res => {
-        this.customerId = res.customer_id;
-        this.notes      = res.items ?? [];
+        this.customerId         = res.customer_id;
+        this.storedCustomerName = res.customer_name ?? null;
+        this.channelType        = res.channel_type ?? null;
+        this.notes              = res.items ?? [];
+        if (this.customerId) this.loadCustomerTags();
+      },
+    });
+  }
+
+  loadAllTags() {
+    this.api.listTags().subscribe({ next: tags => this.allTags = tags });
+  }
+
+  loadCustomerTags() {
+    if (!this.customerId) return;
+    this.api.getCustomerTags(this.customerId).subscribe({
+      next: tags => this.customerTags = tags,
+    });
+  }
+
+  isTagSelected(tag: Tag): boolean {
+    return this.customerTags.some(t => t.id === tag.id);
+  }
+
+  toggleTag(tag: Tag) {
+    if (!this.customerId || this.tagSaving) return;
+    const ids = this.isTagSelected(tag)
+      ? this.customerTags.filter(t => t.id !== tag.id).map(t => t.id)
+      : [...this.customerTags.map(t => t.id), tag.id];
+    this.tagSaving = true;
+    this.api.setCustomerTags(this.customerId, ids).subscribe({
+      next: () => { this.tagSaving = false; this.loadCustomerTags(); },
+      error: () => { this.tagSaving = false; },
+    });
+  }
+
+  startEditCustomerName() {
+    this.customerNameDraft  = this.storedCustomerName ?? '';
+    this.editingCustomerName = true;
+  }
+
+  cancelEditCustomerName() {
+    this.editingCustomerName = false;
+    this.customerNameDraft   = '';
+  }
+
+  saveCustomerName() {
+    if (this.customerNameSaving) return;
+    const name = this.customerNameDraft.trim() || null;
+    this.customerNameSaving = true;
+    this.api.updateTicketCustomName(this.ticketId, name).subscribe({
+      next: () => {
+        this.storedCustomerName  = name;
+        this.customerNameSaving  = false;
+        this.editingCustomerName = false;
+      },
+      error: () => {
+        this.customerNameSaving  = false;
+        this.errorMsg = '儲存自訂名稱失敗';
       },
     });
   }
@@ -174,7 +259,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   // ── Polling ──────────────────────────────────────────────
 
   private startPolling() {
-    this.pollSub = interval(5000)
+    this.pollSub = interval(10000)
       .pipe(switchMap(() => this.api.getMessages(this.ticketId)))
       .subscribe({
         next: msgs => {
@@ -202,10 +287,16 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     this.errorMsg = '';
 
     this.api.reply(this.ticketId, text).subscribe({
-      next: () => {
+      next: (res: any) => {
         this.sending = false;
+        if (res?.line_status && res.line_status !== 200) {
+          this.errorMsg = res.line_warning ?? `訊息已儲存，但 LINE 推播失敗（${res.line_status}）─ 客人可能已封鎖或移除 LINE@`;
+        }
+        // 停止輪詢 → 立即 refresh → 重啟輪詢（重置 5 秒計時，避免送訊後立刻再 poll）
+        this.pollSub?.unsubscribe();
         this.refresh();
         this.loadStatus();
+        this.startPolling();
       },
       error: err => {
         this.sending = false;
@@ -305,6 +396,68 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
       event.preventDefault();
       this.submitNote();
     }
+  }
+
+  // ── 繳費訂單 ─────────────────────────────────────────────
+
+  loadPaymentOrders() {
+    this.paymentLoading = true;
+    this.api.listPaymentOrders(this.ticketId).subscribe({
+      next: items => { this.paymentOrders = items; this.paymentLoading = false; },
+      error: ()    => { this.paymentLoading = false; },
+    });
+  }
+
+  openPaymentTab() {
+    this.rightTab = 'payment';
+    this.loadPaymentOrders();
+  }
+
+  createPaymentOrder() {
+    if (!this.paymentAmount || this.paymentAmount <= 0) {
+      this.paymentErr = '金額必須大於 0'; return;
+    }
+    this.paymentSaving = true;
+    this.paymentErr    = '';
+    const body: any = { amount: this.paymentAmount };
+    if (this.paymentDesc.trim()) body.description = this.paymentDesc.trim();
+    if (this.paymentDue.trim())  body.due_date     = this.paymentDue.trim();
+
+    this.api.createPaymentOrder(this.ticketId, body).subscribe({
+      next: () => {
+        this.paymentSaving = false;
+        this.paymentAmount = 0;
+        this.paymentDesc   = '';
+        this.paymentDue    = '';
+        this.paymentMsg    = '✅ 訂單已建立，繳費通知已推送給客人';
+        this.loadPaymentOrders();
+        setTimeout(() => this.paymentMsg = '', 4000);
+      },
+      error: e => {
+        this.paymentSaving = false;
+        this.paymentErr    = e?.error?.detail ?? '建立失敗';
+      },
+    });
+  }
+
+  verifyOrder(orderId: number) {
+    if (!confirm('確定手動標記為已收款？')) return;
+    this.api.verifyPaymentOrder(orderId).subscribe({
+      next: () => this.loadPaymentOrders(),
+      error: e => this.paymentErr = e?.error?.detail ?? '操作失敗',
+    });
+  }
+
+  cancelOrder(orderId: number) {
+    if (!confirm('確定取消此訂單？')) return;
+    this.api.cancelPaymentOrder(orderId).subscribe({
+      next: () => this.loadPaymentOrders(),
+      error: e => this.paymentErr = e?.error?.detail ?? '操作失敗',
+    });
+  }
+
+  paymentStatusLabel(s: string): string {
+    return { pending: '⏳ 待繳', verified: '✅ 已收款', cancelled: '❌ 已取消' }[s] ?? s;
   }
 
   // ── 訊息類型 ─────────────────────────────────────────────
