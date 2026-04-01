@@ -39,6 +39,7 @@ class QuickReplyRuleUpdate(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────────
 
+# 列出所有 Quick Reply 關鍵字規則（含啟用/停用狀態）
 @router.get("/quickreply/rules")
 async def list_rules(staff: dict = Depends(get_current_staff)):
     """列出所有 Quick Reply 規則"""
@@ -56,6 +57,7 @@ async def list_rules(staff: dict = Depends(get_current_staff)):
         return {"ok": True, "items": rows}
 
 
+# 新增一條 Quick Reply 關鍵字規則，admin only，關鍵字不可重複
 @router.post("/quickreply/rules")
 async def create_rule(
     body: QuickReplyRuleCreate,
@@ -97,6 +99,7 @@ async def create_rule(
             raise HTTPException(status_code=500, detail=str(e))
 
 
+# 更新指定 Quick Reply 規則的關鍵字、回覆文字或按鈕設定，admin only
 @router.put("/quickreply/rules/{rule_id}")
 async def update_rule(
     rule_id: int,
@@ -141,6 +144,7 @@ async def update_rule(
         return {"ok": True}
 
 
+# 刪除指定的 Quick Reply 規則，admin only
 @router.delete("/quickreply/rules/{rule_id}")
 async def delete_rule(
     rule_id: int,

@@ -17,6 +17,7 @@ DB_NAME     = os.environ.get("DB_NAME",     "iDiving_Line")
 _pool: aiomysql.Pool | None = None
 
 
+# 初始化全域 aiomysql 連線池，應用程式啟動時呼叫一次
 async def init_db_pool():
     """在 app 啟動時呼叫一次，建立全域連線池"""
     global _pool
@@ -34,6 +35,7 @@ async def init_db_pool():
     )
 
 
+# 關閉並釋放全域連線池，應用程式關閉時呼叫
 async def close_db_pool():
     """在 app 關閉時呼叫，釋放連線池"""
     global _pool
@@ -43,6 +45,7 @@ async def close_db_pool():
         _pool = None
 
 
+# 非同步上下文管理器：從連線池取得連線，例外時自動 rollback
 @asynccontextmanager
 async def get_conn():
     """
@@ -63,3 +66,5 @@ async def get_conn():
         except Exception:
             await conn.rollback()
             raise
+        else:
+            await conn.commit()  # reset REPEATABLE READ snapshot before returning to pool

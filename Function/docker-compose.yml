@@ -27,9 +27,16 @@ services:
       DB_NAME: "iDiving_Line"
 
       # === LINE ===
-      #LINE_CHANNEL_SECRET: "dc20df0dd8bb794cff347adfe115ac46"
       LINE_CHANNEL_SECRET: "a4e54bb892d26c3f4d6f8398a263b5e4"
-      LINE_CHANNEL_ACCESS_TOKEN: "b/B/IlbihPZlBzjjWoNi3pTP3KXy3qC3nWy1IXNM2qHNEy+RNOVxGPbYAHjY9657HdNvJcs16QUaLumxsotfqx0Cf9OdThqcBhti4FLyPacTrV1usFBkwC2kddT/jzSbGSYfcZ5fFmvaBWBbAMwr7QdB04t89/1O/w1cDnyilFU="
+      LINE_CHANNEL_ACCESS_TOKEN: "xW38kRqbWDgj+H3uv5ISjDIE2v79Y/IjbR7xqYEiGiOttt5eoiWTbnOgLVNryibWSjyT8Aa7nI8eyGmCpR8Sek6KhjlVzF7lUbFqBBGOU52PzBprIkSnpK26PHtmbCBXU7MIPJVMvtJr7HLKWrTKggdB04t89/1O/w1cDnyilFU="
+      LINE_CHANNEL_ID: "1653654785"
+      LINE_LIFF_URL: "https://liff.line.me/2009420432-ZWrRUmas"
+
+      # === ATM 匯款帳號 ===
+      ATM_BANK_CODE: "822"
+      ATM_BANK_NAME: "中國信託 士林分行"
+      ATM_ACCOUNT_NAME: "愛潛水股份有限公司"
+      ATM_ACCOUNT: "285-54009941-9"
 
       # === 內部 Notify（課程更新推播）===
       # LINE_TO_ID：要接收通知的 userId / groupId / roomId
@@ -59,6 +66,16 @@ services:
       - ./data/line_content:/app/data/line_content
     depends_on:
       - api
+    restart: unless-stopped
+
+  web-angular:
+    image: nginx:alpine
+    container_name: docker-angular
+    ports:
+      - "8081:80"
+    volumes:
+      - ./website-angular:/usr/share/nginx/html:ro
+      - ./nginx/angular.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
   cloudflared:

@@ -49,6 +49,7 @@ class SnapshotIn(BaseModel):
 
 
 # ── POST /internal/crawler/snapshot ──────────────────────────────────────────
+# 接收爬蟲回傳的課程快照資料並儲存至資料庫，驗證 CRAWLER_SECRET token
 @router.post("/crawler/snapshot")
 async def save_snapshot(body: SnapshotIn):
     """儲存一筆課程快照。checker.py 每次爬取後呼叫一次。"""
@@ -79,6 +80,7 @@ async def save_snapshot(body: SnapshotIn):
 
 
 # ── GET /internal/crawler/last_hash ──────────────────────────────────────────
+# 查詢指定課程最新一筆 content_hash，供爬蟲比對是否有內容變更
 @router.get("/crawler/last_hash")
 async def get_last_hash(course_name: str, token: str):
     """取得某課程最新一筆 content_hash，供 checker.py 比對是否有變更。"""

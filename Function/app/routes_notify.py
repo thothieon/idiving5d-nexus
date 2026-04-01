@@ -18,6 +18,7 @@ class NotifyIn(BaseModel):
     preview: str
 
 
+# 透過 LINE Push API 將文字訊息發送至設定的通知對象（userId/groupId/roomId）
 def line_push(text: str):
     if not LINE_TO_ID:
         raise RuntimeError("LINE_NOTIFY_TO_ID 未設定")
@@ -38,6 +39,7 @@ def line_push(text: str):
     r.raise_for_status()
 
 
+# 接收爬蟲偵測到課程內容更新的通知，驗證 token 後推送 LINE 訊息
 @router.post("/notify")
 def internal_notify(body: NotifyIn):
     if not NOTIFY_TOKEN or body.token != NOTIFY_TOKEN:

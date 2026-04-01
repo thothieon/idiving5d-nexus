@@ -33,18 +33,21 @@ class RetryBody(BaseModel):
 
 # ── LINE API helpers（async）────────────────────────────────
 
+# 組裝 LINE API 請求的 Authorization 標頭
 def _line_headers():
     if not LINE_CHANNEL_ACCESS_TOKEN:
         raise HTTPException(status_code=500, detail="LINE_CHANNEL_ACCESS_TOKEN missing")
     return {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
 
 
+# 非同步發送 GET 請求至 LINE API，回傳狀態碼與 JSON 資料
 async def _async_get_ids(url: str, params: dict) -> tuple[int, dict]:
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.get(url, headers=_line_headers(), params=params)
         return r.status_code, (r.json() if r.status_code == 200 else {})
 
 
+# 分頁取得 LINE Bot 的所有追蹤者 user_id 清單
 async def fetch_followers_ids(max_pages: int = 10) -> list[str]:
     user_ids: list[str] = []
     start = None
@@ -66,6 +69,7 @@ async def fetch_followers_ids(max_pages: int = 10) -> list[str]:
     return out
 
 
+# 分頁取得指定 LINE 群組的所有成員 user_id 清單
 async def fetch_group_members(group_id: str) -> list[str]:
     ids: list[str] = []; start = None
     for _ in range(50):
@@ -82,6 +86,7 @@ async def fetch_group_members(group_id: str) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
+# 分頁取得指定 LINE 聊天室的所有成員 user_id 清單
 async def fetch_room_members(room_id: str) -> list[str]:
     ids: list[str] = []; start = None
     for _ in range(50):
@@ -98,6 +103,7 @@ async def fetch_room_members(room_id: str) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
+# 取得指定 LINE 用戶的個人資料，同時回傳錯誤碼與錯誤訊息（如 not_found、rate_limited 等）
 async def get_profile(user_id: str) -> tuple[dict, str | None, str | None]:
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.get(
@@ -113,6 +119,7 @@ async def get_profile(user_id: str) -> tuple[dict, str | None, str | None]:
 
 # ── DB helpers（async）──────────────────────────────────────
 
+# 確保 customers 資料表中存在指定 LINE 用戶，不存在則自動建立，回傳 customer_id
 async def ensure_customer(conn, line_user_id: str) -> int:
     async with conn.cursor() as cur:
         await cur.execute("SELECT id FROM customers WHERE line_user_id=%s LIMIT 1", (line_user_id,))
@@ -126,6 +133,7 @@ async def ensure_customer(conn, line_user_id: str) -> int:
         return int(cur.lastrowid)
 
 
+# 更新（或新增）客戶的 LINE 個人資料（displayName、pictureUrl），並標記同步成功
 async def upsert_customer_profile(conn, line_user_id: str, profile: dict):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -145,6 +153,7 @@ async def upsert_customer_profile(conn, line_user_id: str, profile: dict):
         )
 
 
+# 記錄 LINE 個人資料同步失敗的原因與失敗次數
 async def mark_profile_failure(conn, line_user_id: str, code: str, msg: str):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -160,6 +169,7 @@ async def mark_profile_failure(conn, line_user_id: str, code: str, msg: str):
         )
 
 
+# 從 conversations 資料表蒐集所有群組與聊天室的 channel_id 清單
 async def collect_group_room_ids_from_db(conn) -> tuple[list[str], list[str]]:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -174,6 +184,7 @@ async def collect_group_room_ids_from_db(conn) -> tuple[list[str], list[str]]:
 
 # ── 背景任務（Thread + 自己的 event loop）───────────────────
 
+# 背景執行緒：持續批次同步客戶個人資料直到全部完成或達到上限，需自建 event loop
 def _run_to_zero_bg(batch_size: int, sleep_ms: int, max_batches: int,
                     max_seconds: int, fail_rate_threshold: float):
     """
@@ -269,6 +280,7 @@ def _run_to_zero_bg(batch_size: int, sleep_ms: int, max_batches: int,
 
 # ── Endpoints ────────────────────────────────────────────────
 
+# 收集所有追蹤者及群組/聊天室成員的 user_id，並確保存入 customers 資料表（admin only）
 @router.get("/audiences")
 async def audiences_collect(
     staff: dict = Depends(get_current_staff),
@@ -321,6 +333,7 @@ async def audiences_collect(
     }
 
 
+# 查詢客戶個人資料同步狀態統計，並提供建議的批次大小與延遲設定
 @router.get("/audiences/status")
 async def audiences_status(staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
@@ -348,6 +361,7 @@ async def audiences_status(staff: dict = Depends(get_current_staff)):
     }
 
 
+# 單次批次同步尚未取得個人資料的客戶，可設定批次數量與延遲（admin only）
 @router.post("/audiences/profiles")
 async def audiences_profiles(
     staff: dict = Depends(get_current_staff),
@@ -387,6 +401,7 @@ async def audiences_profiles(
         }
 
 
+# 啟動背景執行緒持續同步客戶個人資料直到無缺少為止，防止重複執行（admin only）
 @router.post("/audiences/profiles/run_to_zero")
 async def audiences_profiles_run_to_zero(
     staff: dict = Depends(get_current_staff),
@@ -413,12 +428,14 @@ async def audiences_profiles_run_to_zero(
     }
 
 
+# 查詢背景同步任務的目前執行狀態（running、batches_done、total_ok 等）
 @router.get("/audiences/profiles/run_state")
 async def audiences_profiles_run_state(staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
     return {"ok": True, "state": dict(_RUN_STATE)}
 
 
+# 針對指定的失敗 user_id 清單重新嘗試同步個人資料（admin only，最多 300 筆）
 @router.post("/audiences/profiles/retry_failed")
 async def audiences_profiles_retry_failed(
     body: RetryBody,

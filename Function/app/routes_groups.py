@@ -6,6 +6,7 @@ from app.db import get_conn
 router = APIRouter()
 
 
+# 列出所有 LINE 群組及其成員人數（admin only）
 @router.get("/groups")
 async def list_groups(staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
@@ -24,6 +25,7 @@ async def list_groups(staff: dict = Depends(get_current_staff)):
             return {"items": await cur.fetchall()}
 
 
+# 取得指定群組的成員清單（含客戶顯示名稱與加入時間，admin only）
 @router.get("/groups/{group_id}/members")
 async def get_group_members(group_id: str, staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
@@ -39,6 +41,7 @@ async def get_group_members(group_id: str, staff: dict = Depends(get_current_sta
             return {"items": await cur.fetchall()}
 
 
+# 取得指定客戶的身份識別資料清單（如 email、電話等，admin only）
 @router.get("/customers/{customer_id}/identities")
 async def get_customer_identities(customer_id: int, staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)
@@ -53,6 +56,7 @@ async def get_customer_identities(customer_id: int, staff: dict = Depends(get_cu
             return {"items": await cur.fetchall()}
 
 
+# 取得指定客戶的來源系統資料（如外部系統匯入記錄，admin only）
 @router.get("/customers/{customer_id}/sources")
 async def get_customer_sources(customer_id: int, staff: dict = Depends(get_current_staff)):
     require_admin_staff(staff)

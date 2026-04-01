@@ -35,6 +35,7 @@ class BookingConfirmBody(BaseModel):
 
 # ── 狀態機 Endpoints ─────────────────────────────────────────
 
+# 取得指定 ticket 目前的狀態及可允許的下一步轉換清單
 @router.get("/tickets/{ticket_id}/status")
 async def get_ticket_status(
     ticket_id: int,
@@ -54,6 +55,7 @@ async def get_ticket_status(
         }
 
 
+# 手動觸發 ticket 狀態轉換（先驗證合法性再執行），並記錄操作員工
 @router.post("/tickets/{ticket_id}/transition")
 async def ticket_transition(
     ticket_id: int,
@@ -81,6 +83,7 @@ async def ticket_transition(
         }
 
 
+# 取得指定 ticket 的狀態變更歷史記錄，含操作員工與備註
 @router.get("/tickets/{ticket_id}/sessions")
 async def get_ticket_sessions(
     ticket_id: int,
@@ -107,6 +110,7 @@ async def get_ticket_sessions(
         return {"ok": True, "items": rows}
 
 
+# 取得各非結案狀態的 ticket 數量摘要統計
 @router.get("/tickets/status_summary")
 async def tickets_status_summary(staff: dict = Depends(get_current_staff)):
     async with get_conn() as conn:
@@ -129,6 +133,7 @@ async def tickets_status_summary(staff: dict = Depends(get_current_staff)):
 
 # ── 報名/預約 Endpoints ──────────────────────────────────────
 
+# 取得指定 ticket 的報名/預約資料
 @router.get("/tickets/{ticket_id}/booking")
 async def get_booking(
     ticket_id: int,
@@ -144,6 +149,7 @@ async def get_booking(
         return {"ok": True, "booking": row}
 
 
+# 新增或更新指定 ticket 的報名/預約資料，並同步更新客戶基本資料
 @router.post("/tickets/{ticket_id}/booking")
 async def upsert_booking(
     ticket_id: int,
@@ -223,6 +229,7 @@ async def upsert_booking(
         return {"ok": True}
 
 
+# 確認或取消報名，確認時自動將 ticket 狀態轉換為結案
 @router.post("/tickets/{ticket_id}/booking/confirm")
 async def confirm_booking(
     ticket_id: int,
@@ -254,6 +261,7 @@ async def confirm_booking(
 
 # ── Active Tickets Polling ────────────────────────────────────
 
+# 列出所有未結案的 ticket，含最後客戶訊息與等待分鐘數，支援分頁
 @router.get("/tickets/active")
 async def list_active_tickets(
     staff: dict = Depends(get_current_staff),
@@ -272,7 +280,8 @@ async def list_active_tickets(
                     t.last_customer_message_at,
                     c.channel_type,
                     c.channel_id,
-                    cu.display_name,
+                    COALESCE(cu.display_name, lc.display_name) AS display_name,
+                    COALESCE(cu.customer_name, lc.custom_name) AS customer_name,
                     cu.phone,
                     a.agent_name AS active_agent,
                     (
@@ -290,7 +299,9 @@ async def list_active_tickets(
                     ) AS minutes_since_last_message
                 FROM tickets t
                 JOIN conversations c ON c.id = t.conversation_id
-                LEFT JOIN customers cu ON cu.line_user_id = c.channel_id
+                LEFT JOIN customers cu ON cu.line_user_id = c.channel_id AND c.channel_type = 'user'
+                LEFT JOIN line_channels lc ON lc.channel_id = c.channel_id
+                                          AND c.channel_type IN ('group', 'room')
                 LEFT JOIN assignments a ON a.ticket_id = t.id AND a.status = 'active'
                 WHERE t.current_status != 'closed'
                 ORDER BY COALESCE(t.last_customer_message_at, t.opened_at) DESC

@@ -18,6 +18,7 @@ _CACHE: dict = {
 _CACHE_TTL = 60.0       # 秒，60 秒後自動重新載入
 
 
+# 從資料庫載入所有啟用中的 Quick Reply 規則，並存入 in-memory cache
 async def _load_rules() -> list[dict]:
     """從 DB 載入所有 is_active=1 的規則，結果存進 cache"""
     async with get_conn() as conn:
@@ -41,6 +42,7 @@ async def _load_rules() -> list[dict]:
     return rules
 
 
+# 取得 Quick Reply 規則清單，優先使用 cache（60 秒 TTL），過期才重新查 DB
 async def get_rules() -> list[dict]:
     """取得規則（優先用 cache，過期才重新查 DB）"""
     now = time.monotonic()
@@ -50,11 +52,13 @@ async def get_rules() -> list[dict]:
     return _CACHE["rules"]
 
 
+# 強制讓 cache 失效，後台更新規則後呼叫以確保下次重新從 DB 載入
 async def invalidate_cache():
     """後台更新規則後呼叫，強制下次重新載入"""
     _CACHE["loaded_at"] = 0.0
 
 
+# 以完全符合方式比對訊息文字，回傳第一個符合的規則，無符合則回傳 None
 async def match_rule(text: str) -> Optional[dict]:
     """
     完全符合比對。
@@ -70,6 +74,7 @@ async def match_rule(text: str) -> Optional[dict]:
     return None
 
 
+# 依據規則組裝 LINE Quick Reply 訊息 payload，按鈕最多 13 個，label 最多 20 字
 def build_quick_reply_message(rule: dict) -> dict:
     """
     組裝 LINE Quick Reply message payload。

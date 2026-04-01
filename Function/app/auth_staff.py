@@ -6,6 +6,7 @@ from app.db import get_conn
 from app.security_staff_tokens import sha256_hex
 
 
+# 更新指定 token 的最後使用時間（last_used_at）
 async def _touch_token_last_used(conn, token_id: int):
     try:
         async with conn.cursor() as cur:
@@ -17,6 +18,7 @@ async def _touch_token_last_used(conn, token_id: int):
         await conn.rollback()
 
 
+# 依據原始 token 查詢對應的有效員工資料，並更新最後使用時間
 async def _load_staff_by_token(raw_token: str):
     token_hash = sha256_hex(raw_token)
 
@@ -46,6 +48,7 @@ async def _load_staff_by_token(raw_token: str):
         return row
 
 
+# FastAPI Depends 注入函式：從請求標頭 X-Admin-Token 驗證員工身份
 async def get_current_staff(
     x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
 ):
@@ -59,6 +62,7 @@ async def get_current_staff(
     return row
 
 
+# 檢查員工是否具有 admin 角色，不符合則拋出 403 錯誤
 def require_admin_staff(staff: dict):
     """同步檢查即可，不需要 DB 操作"""
     if (staff.get("role") or "") != "admin":

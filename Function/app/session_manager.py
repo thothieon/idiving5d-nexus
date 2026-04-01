@@ -23,6 +23,7 @@ STATUS_LABEL: dict[str, str] = {
 }
 
 
+# 查詢指定 ticket 目前的狀態，查無資料則預設為 "new"
 async def get_ticket_current_status(conn, ticket_id: int) -> str:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -33,6 +34,7 @@ async def get_ticket_current_status(conn, ticket_id: int) -> str:
     return (row["current_status"] if row else "new")
 
 
+# 變更 ticket 狀態並寫入 conversation_sessions 歷史記錄，呼叫端需自行 commit
 async def transition_ticket_status(
     conn,
     ticket_id:    int,
@@ -62,6 +64,7 @@ async def transition_ticket_status(
         )
 
 
+# 同步驗證狀態轉換是否合法，不合法直接拋出 400 錯誤
 def validate_transition(current: str, new_status: str):
     """同步檢查，不合法直接 raise HTTPException"""
     allowed = VALID_TRANSITIONS.get(current, [])
@@ -74,6 +77,7 @@ def validate_transition(current: str, new_status: str):
         )
 
 
+# 收到客戶訊息時呼叫，自動將 ticket 狀態推進（new→waiting、closed→new）
 async def on_customer_message(conn, ticket_id: int):
     """
     收到客戶訊息時呼叫：自動推進狀態

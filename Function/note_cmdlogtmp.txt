@@ -1,0 +1,184 @@
+
+
+docker compose down
+docker compose up -d --build
+docker logs -f docker-linebot
+
+真的token
+xW38kRqbWDgj+H3uv5ISjDIE2v79Y/IjbR7xqYEiGiOttt5eoiWTbnOgLVNryibWSjyT8Aa7nI8eyGmCpR8Sek6KhjlVzF7lUbFqBBGOU52PzBprIkSnpK26PHtmbCBXU7MIPJVMvtJr7HLKWrTKggdB04t89/1O/w1cDnyilFU=
+
+
+✅ INSERT OK
+RAW_TOKEN = adm_KlDgGFgfnC99By8se5NaREX4Kj_b_pBYpPKml5wmrsU
+PREFIX    = adm_KlDg
+TOKEN_HASH= 8f853c03b3f3caad615eedff53a92d650f695835b14caf0c3cf66098265a8f27
+
+
+adm_Onj7pI3m6L80Dvnd4NWhdatZFFT_5mrv7ZCzw90NTTw
+
+root@5d5712b62d9a:/app/app# python bootstrap_admin_token.py --staff-id 1 --label "first-admin"
+? INSERT OK
+RAW_TOKEN = adm_DrT4fzm25j-f7_hRotKBsaGI2hTH-qMiV79AGLMXNuI
+PREFIX    = adm_DrT4
+TOKEN_HASH= 385a4edd8018a7a809acef9e2f0b51b361db66ddd2b2bea1641ff58f24ef8fba
+
+
+RAW_TOKEN = adm_pDF72EmUbHf-5oBHgeNdI6YuhD9vzW0FROOTJNyr47E
+TOKEN_HASH= fa10149219839735f887be6a780577d1b63e4bd14fe803dc05b1cf16ef80b68a
+PREFIX    = adm_pDF7
+
+INSERT INTO staff_tokens (staff_id, token_hash, token_prefix, label)
+VALUES (1, 'fa10149219839735f887be6a780577d1b63e4bd14fe803dc05b1cf16ef80b68a', 'adm_pDF7', 'bootstrap');
+
+
+測試中文~~~~~~#$%@#$#$%
+
+
+
+
+
+
+
+
+docker build -t docker-linebot -f Dockerfile .
+docker run -d --name flask5000 \
+  -p 5000:5000 \
+  -v "$PWD/data:/app/data" \
+  --restart unless-stopped \
+  docker-linebot
+
+
+
+
+
+
+
+-------------------------------------------
+docker build -t flask-linebotv3-idiving -f Dockerfile .
+docker run -d --name flask5000 \
+  -p 5000:5000 \
+  -v "$PWD/data:/app/data" \
+  --restart unless-stopped \
+  flask-linebotv3-idiving
+  
+docker run -d --name flask5000 \
+  -p 5000:5000 \
+  -v "$PWD/data:/app/data" \
+  flask-linebotv3-idiving
+  
+docker run -d --name flask5000 \
+  -p 5000:5000 \
+  --env-file .env \
+  -v "$PWD/data:/app/data" \
+  flask-linebotv3-idiving
+  
+docker run -d --name flask5000 \
+  -p 5000:5000 \
+  -e LINE_CHANNEL_ACCESS_TOKEN="HkJQFvqRYUMu+YRVBCB47kiXYZ4g0X/Z4PrAjWGdxDWFedN7rKVw92b50UoYba9CsbDPs5LTDpIYNZ\
+  Hn0VH1huS7DEfIPkHGIkF6cjWIE3/PiVkwHLzQDmkQoIdy7PrNN8UICnHDUSiWvayRR0T/rAdB04t89/1O/w1cDnyilFU=" \
+  -e LINE_CHANNEL_SECRET="376b5700a84e0b91525caffd327dff19" \
+  -v "$PWD/data:/app/data" \
+  flask-linebotv3-idiving
+  
+docker run -d --name flask5000 \
+  -p 5000:5000 \
+  -e LINE_CHANNEL_ACCESS_TOKEN="9EgarEG/jDUhVovWAskVYrwsovUWjy31y/c3tLmnpfuVG95fhqYdRyMiOi/HRx7UWlnnmn/82dhEFL1\
+  WQNihkUJOcsyqfRxUCXwTPS4VZtMa0q9/F+TVCrLMmWnMkV24EdaxwT/Kd99OGlC5kUH69gdB04t89/1O/w1cDnyilFU=" \
+  -e LINE_CHANNEL_SECRET="3255598fc8ae81b1d44f77d1c8b48fe0" \
+  -v "$PWD/data:/app/data" \
+  flask-linebotv3-idiving
+
+docker exec -it flask5000 sh -lc 'echo "TOKEN_LEN=${#LINE_CHANNEL_ACCESS_TOKEN}  SECRET_LEN=${#LINE_CHANNEL_SECRET}  DB_PATH=$DB_PATH"'
+docker exec -it flask5000 sh -lc 'curl -s -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN" https://api.line.me/v2/bot/info'
+
+{"userId":"U2fc6d34b38244a66f54a573d443090f6","basicId":"@945ohzbh","displayName":"iDiving小幫手","chatMode":"chat","markAsReadMode":"manual"}adminpi@rpz2w:~/docker-debian-nginx/flask-linebotv3-idiving $ 
+
+docker exec -it flask5000 sh -lc 'echo ${#LINE_CHANNEL_SECRET}'
+curl -s -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN" https://api.line.me/v2/bot/info
+
+-------------------------------------------
+docker run -d --name docker-debian-vscode \
+  -p 8080:8080 -p 4200:4200 \
+  -e PASSWORD="hsieh690831" \
+  -v "$PWD:/workspace" \
+  docker-debian-vscode
+
+#進入容器
+docker exec -it docker-debian-vscode bash
+
+# 若主機 80 已被佔用，可改 -p 8080:80
+docker run -d --name my-nginx \
+  -p 80:80 \
+  -v "$PWD/site:/var/www/html:ro" \
+  --restart unless-stopped \
+  rpi-debian-nginx
+
+
+docker run -d --name docker-debiannginx-journeygo8000 \
+  -p 8000:80 \
+  -v "$PWD/web1/site:/docker-debian-nginx/journeygo/site" \
+  --restart unless-stopped docker-debiannginx-journeygo8000
+Unable to find image 'docker-debiannginx-journeygo8000:latest' locally
+docker: Error response from daemon: pull access denied for docker-debiannginx-journeygo8000, repository does not exist or may require 'docker login': denied: requested access to the resource is denied
+
+Run 'docker run --help' for more information
+sudo apt install -y curl lsb-release
+
+# 匯入 Cloudflare 簽章金鑰
+curl -L https://pkg.cloudflare.com/cloudflare-main.gpg \
+  | sudo tee /usr/share/keyrings/cloudflare-archive-keyring.gpg >/dev/null
+
+# 新增套件庫（正確寫法：輸出到 /etc/apt/sources.list.d/cloudflared.list）
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/cloudflared.list
+
+
+
+sudo apt update
+
+sudo apt install cloudflared
+
+cloudflared tunnel create journeygo-idiving-tunnel
+
+cloudflared tunnel route dns journeygo-idiving-tunnel idiving.journeygo.com.tw
+
+cloudflared tunnel run journeygo-idiving-tunnel
+
+
+sudo dpkg -i cloudflared-linux-arm64.deb
+cloudflared ingress validate --config /home/adminpi/.cloudflared/config.yml
+sudo cloudflared service install
+sudo cloudflared --config /home/adminpi/.cloudflared/config.yml service install
+sudo systemctl enable cloudflared
+sudo systemctl start cloudflared
+ 
+curl -I http://192.168.5.12:5001
+
+curl -I http://192.168.5.12:5001
+curl: (56) Recv failure: 連線被對方重設
+OCI runtime exec failed: exec failed: cannot exec in a stopped container: unknown
+
+
+Cannot determine default configuration path. No file [config.yml config.yaml] in [~/.cloudflared ~/.cloudflare-warp ~/cloudflare-warp /etc/cloudflared /usr/local/etc/cloudflared]
+
+
+
+9c2fe1a6-fae2-4876-b912-aad7b4c9ecd5.json
+
+curl -I http://localhost
+cloudflared ingress validate --config ~/.cloudflared/config.yml
+
+cloudflared ingress validate
+Use `cloudflared tunnel run` to start tunnel juorneygo-tunnel
+
+cloudflared tunnel info journeygo-tunnel
+
+dig journeygo.com.tw +short
+-bash: dig：指令找不到
+
+
+cloudflared --config ~/.cloudflared/config.yml tunnel run journeygo-tunnel
+
+
+ 
+

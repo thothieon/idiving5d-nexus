@@ -1,5 +1,6 @@
 # app/routes_callback.py  ── idiving5d-OctoFlow v260310
 import os
+import time
 import json
 import hmac
 import base64
@@ -38,6 +39,7 @@ router = APIRouter()
 
 # ── LINE helpers ─────────────────────────────────────────────
 
+# 組裝 LINE API 請求所需的 Authorization 標頭
 def _line_headers() -> dict:
     if not LINE_CHANNEL_ACCESS_TOKEN:
         raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN is empty")
@@ -47,6 +49,7 @@ def _line_headers() -> dict:
     }
 
 
+# 驗證 LINE Webhook 請求簽章，防止偽造請求
 def verify_line_signature(raw_body: bytes, signature_b64: str) -> bool:
     if not LINE_CHANNEL_SECRET:
         raise RuntimeError("LINE_CHANNEL_SECRET is empty")
@@ -55,6 +58,7 @@ def verify_line_signature(raw_body: bytes, signature_b64: str) -> bool:
     return hmac.compare_digest(expected, signature_b64 or "")
 
 
+# 從 LINE event 中萃取來源類型（user/group/room）與對應 ID
 def _extract_source(event: dict) -> tuple[str | None, str | None]:
     src = event.get("source") or {}
     st  = src.get("type")
@@ -64,18 +68,21 @@ def _extract_source(event: dict) -> tuple[str | None, str | None]:
     return None, None
 
 
+# 從 LINE event 中取得發送者的 userId
 def _extract_user_id(event: dict) -> Optional[str]:
     return (event.get("source") or {}).get("userId")
 
 
 # ── async LINE API calls ─────────────────────────────────────
 
+# 以非同步方式對 LINE API 發送 GET 請求，回傳狀態碼與 JSON 回應
 async def _async_get(url: str, params: dict | None = None) -> tuple[int, dict]:
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url, headers=_line_headers(), params=params)
         return r.status_code, (r.json() if r.status_code == 200 else {})
 
 
+# 向 LINE API 查詢群組摘要資訊（群組名稱、圖片等）
 async def get_group_summary(group_id: str) -> Optional[dict]:
     if not group_id:
         return None
@@ -83,6 +90,7 @@ async def get_group_summary(group_id: str) -> Optional[dict]:
     return data if status == 200 else None
 
 
+# 向 LINE API 查詢聊天室成員人數
 async def get_room_members_count(room_id: str) -> Optional[int]:
     if not room_id:
         return None
@@ -90,6 +98,7 @@ async def get_room_members_count(room_id: str) -> Optional[int]:
     return data.get("count") if status == 200 else None
 
 
+# 從 LINE API 取得個人用戶的個人資料（顯示名稱、頭貼等）
 async def _fetch_line_profile(user_id: str) -> dict | None:
     if not LINE_CHANNEL_ACCESS_TOKEN or user_id.startswith(("C", "R")):
         return None
@@ -104,6 +113,7 @@ async def _fetch_line_profile(user_id: str) -> dict | None:
         return None
 
 
+# 從 LINE API 下載訊息的媒體內容（圖片、影片、音訊、檔案），回傳二進位資料與 MIME 類型
 async def fetch_line_message_content(line_message_id: str) -> tuple[bytes, str]:
     url = f"https://api-data.line.me/v2/bot/message/{line_message_id}/content"
     async with httpx.AsyncClient(timeout=30) as client:
@@ -116,6 +126,7 @@ async def fetch_line_message_content(line_message_id: str) -> tuple[bytes, str]:
 
 # ── group/room 快取刷新 ──────────────────────────────────────
 
+# 依事件來源刷新群組或聊天室的快取資訊至資料庫（背景執行不阻塞主流程）
 async def refresh_group_or_room_cache(event: dict):
     ctype, cid = _extract_source(event)
     if ctype == "group" and cid:
@@ -163,6 +174,7 @@ async def refresh_group_or_room_cache(event: dict):
 
 # ── customers 自動建立 ───────────────────────────────────────
 
+# 確保事件的發送用戶已存在於 customers 表，不存在則自動建立並補齊 LINE 個人資料
 async def ensure_customer_from_event(conn, event: dict):
     user_id = _extract_user_id(event)
     if not user_id:
@@ -217,6 +229,7 @@ async def ensure_customer_from_event(conn, event: dict):
 
 # ── line_events 寫入 ─────────────────────────────────────────
 
+# 將 LINE 原始事件寫入 line_events 資料表，回傳事件 ID
 async def insert_line_event(conn, event: dict) -> str:
     raw   = json.dumps(event, ensure_ascii=False, sort_keys=True)
     ev_id = (event.get("webhookEventId") or event.get("eventId") or "").strip()
@@ -248,6 +261,7 @@ async def insert_line_event(conn, event: dict) -> str:
     return ev_id
 
 
+# 補填 line_events 記錄的 conversation_id 與 ticket_id 關聯
 async def _update_line_event_refs(conn, event_id: str, conversation_id: int, ticket_id: int):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -258,6 +272,7 @@ async def _update_line_event_refs(conn, event_id: str, conversation_id: int, tic
 
 # ── conversation / ticket 管理 ───────────────────────────────
 
+# 查詢或建立對應此 LINE event 的 conversation 記錄，回傳 conversation_id
 async def get_or_create_conversation(conn, event: dict) -> int:
     ctype, cid = _extract_source(event)
     if not ctype or not cid:
@@ -302,6 +317,7 @@ async def get_or_create_conversation(conn, event: dict) -> int:
         return int(row["id"])
 
 
+# 更新 conversation 的最後事件時間戳記
 async def touch_conversation(conn, conversation_id: int):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -310,6 +326,7 @@ async def touch_conversation(conn, conversation_id: int):
         )
 
 
+# 確保指定 conversation 有 open/pending 的 ticket，無則自動建立，回傳 ticket_id
 async def ensure_ticket_for_conversation(conn, conversation_id: int, channel_id: str) -> int:
     async with conn.cursor() as cur:
         await cur.execute(
@@ -332,6 +349,7 @@ async def ensure_ticket_for_conversation(conn, conversation_id: int, channel_id:
         return int(cur.lastrowid)
 
 
+# 更新 ticket 的最後收訊時間戳記
 async def touch_ticket_on_message(conn, ticket_id: int):
     async with conn.cursor() as cur:
         await cur.execute(
@@ -342,10 +360,12 @@ async def touch_ticket_on_message(conn, ticket_id: int):
 
 # ── 訊息存檔 ─────────────────────────────────────────────────
 
+# 確保指定目錄存在，不存在則遞迴建立
 def _ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
 
 
+# 將 LINE 媒體內容依 MIME 類型儲存至磁碟，回傳路徑、大小與檔名
 def save_content_to_disk(line_message_id: str, data: bytes, mime: str) -> tuple[str, int, str]:
     _ensure_dir(LINE_CONTENT_DIR)
     ext = _MIME_EXT.get(mime) or mimetypes.guess_extension(mime) or ""
@@ -356,6 +376,7 @@ def save_content_to_disk(line_message_id: str, data: bytes, mime: str) -> tuple[
     return content_path, len(data), content_name
 
 
+# 若 event 為 message 類型，將訊息內容（含媒體檔案）寫入 messages_raw 資料表
 async def insert_message_raw_if_any(conn, event: dict, event_id: str, conversation_id: int, ticket_id: int):
     if event.get("type") != "message":
         return
@@ -434,6 +455,22 @@ async def insert_message_raw_if_any(conn, event: dict, event_id: str, conversati
             ),
         )
 
+# 將系統事件（如 follow/unfollow）寫入 messages_raw，讓客服在對話中看到提示
+async def _insert_system_message(conn, conversation_id: int, ticket_id: int, text: str):
+    event_id = f"sys_{ticket_id}_{int(time.time() * 1000)}"
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            INSERT IGNORE INTO messages_raw
+              (event_id, conversation_id, ticket_id, line_message_id,
+               direction, message_type, text, raw_json,
+               sender_type, sender_name, created_at)
+            VALUES (%s, %s, %s, NULL, 'system', 'text', %s, '{}', 'system', '系統', NOW())
+            """,
+            (event_id, conversation_id, ticket_id, text),
+        )
+
+
 #async 推送 Quick Reply 的 helper function
 async def _send_quick_reply(channel_id: str, rule: dict):
     """
@@ -465,11 +502,13 @@ async def _send_quick_reply(channel_id: str, rule: dict):
 
 # ── Routes ───────────────────────────────────────────────────
 
+# 健康檢查端點：確認 callback 服務正常運行
 @router.get("/health")
 async def health():
     return {"ok": True, "version": "idiving5d-OctoFlow v260310"}
 
 
+# 測試用 callback endpoint：接收任意 JSON 並原封不動回傳（echo）
 @router.post("/idiving_callback_test")
 async def idiving_callback_test(req: Request):
     try:
@@ -479,6 +518,7 @@ async def idiving_callback_test(req: Request):
     return {"ok": True, "echo": data}
 
 
+# LINE Webhook 主要接收端點：驗證簽章後並行處理所有事件
 @router.post("/callback", response_class=PlainTextResponse)
 async def callback(
     req: Request,
@@ -508,6 +548,7 @@ async def callback(
     return "OK"
 
 
+# 處理單一 LINE 事件：依序完成用戶建立、事件記錄、對話/Ticket 管理、訊息存檔與狀態機推進
 async def _handle_event(event: dict):
     """單一 event 處理邏輯，從 callback 抽出方便 gather"""
     event_id = None
@@ -551,6 +592,13 @@ async def _handle_event(event: dict):
                         await conn.commit()
                         await _send_quick_reply(channel_id, rule)
                         return          # 已 commit，直接返回
+
+            elif event.get("type") == "follow":
+                await _insert_system_message(conn, conversation_id, ticket_id, "📲 客人重新加入 LINE@")
+                await touch_ticket_on_message(conn, ticket_id)
+
+            elif event.get("type") == "unfollow":
+                await _insert_system_message(conn, conversation_id, ticket_id, "⚠️ 客人已移除 LINE@，推播將無法送達")
 
             await conn.commit()
 
