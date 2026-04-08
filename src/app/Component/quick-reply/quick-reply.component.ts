@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -47,6 +47,7 @@ export class QuickReplyComponent implements OnInit {
     private api: AdminApiService,
     private tokenSvc: AdminTokenService,
     private router: Router,
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit() {
@@ -64,10 +65,12 @@ export class QuickReplyComponent implements OnInit {
       next: (items) => {
         this.rules = items;
         this.loading = false;
+        this.cdr.detectChanges();
       },
       error: () => {
         this.loading = false;
         this.errorMsg = '讀取失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -151,6 +154,7 @@ export class QuickReplyComponent implements OnInit {
       error: (e) => {
         this.saving = false;
         this.formError = e?.error?.detail ?? '儲存失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -162,6 +166,7 @@ export class QuickReplyComponent implements OnInit {
     this.api.updateQuickReplyRule(rule.id, { is_active: newVal }).subscribe({
       next: () => {
         rule.is_active = newVal;
+        this.cdr.detectChanges();
       },
       error: () => {
         this.flash('切換失敗', true);
@@ -203,10 +208,12 @@ export class QuickReplyComponent implements OnInit {
   private flash(msg: string, isErr = false) {
     if (isErr) {
       this.errorMsg = msg;
-      setTimeout(() => { this.errorMsg = ''; }, 3000);
+      this.cdr.detectChanges();
+      setTimeout(() => { this.errorMsg = ''; this.cdr.detectChanges(); }, 3000);
     } else {
       this.successMsg = msg;
-      setTimeout(() => { this.successMsg = ''; }, 3000);
+      this.cdr.detectChanges();
+      setTimeout(() => { this.successMsg = ''; this.cdr.detectChanges(); }, 3000);
     }
   }
 }

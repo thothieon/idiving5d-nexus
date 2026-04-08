@@ -1,20 +1,8 @@
 <section class="dash" *ngIf="dashboard as d">
-  <div class="kpi">
-    <div class="num">{{ d.today_new }}</div>
-    <div class="label">今日新增</div>
-  </div>
-  <div class="kpi">
-    <div class="num">{{ d.open_cnt }}</div>
-    <div class="label">待處理</div>
-  </div>
-  <div class="kpi">
-    <div class="num">{{ d.pending_cnt }}</div>
-    <div class="label">進行中</div>
-  </div>
-  <div class="kpi danger">
-    <div class="num">{{ d.overdue_60m }}</div>
-    <div class="label">超時 60 分</div>
-  </div>
+  <div class="kpi"><span class="num">{{ d.today_new }}</span><span class="label">今日新增</span></div>
+  <div class="kpi"><span class="num">{{ d.open_cnt }}</span><span class="label">待處理</span></div>
+  <div class="kpi"><span class="num">{{ d.pending_cnt }}</span><span class="label">進行中</span></div>
+  <div class="kpi danger"><span class="num">{{ d.overdue_60m }}</span><span class="label">超時 60m</span></div>
 </section>
 
 <section class="controls">
@@ -24,28 +12,31 @@
       <button [class.active]="mode==='closed'" (click)="setMode('closed')">已結案</button>
     </div>
     <div class="ctrl-actions">
-      <button class="ghost" (click)="refresh()" [disabled]="loading">刷新</button>
+      <button class="ghost" (click)="refresh()" [disabled]="loading">🔄 重整</button>
       <button class="ghost" *ngIf="isAdmin" (click)="goQuickReply()">Quick Reply</button>
       <button class="ghost" *ngIf="isAdmin" (click)="openTagModal()">🏷 標籤管理</button>
     </div>
   </div>
 
   <input [(ngModel)]="search" placeholder="搜尋：客名 / subject / 最後一句 / ticketId" />
-  <label class="chk">
-    <input type="checkbox" [(ngModel)]="onlyOverdue" />
-    只看超時 60m
-  </label>
 
-  <!-- 標籤篩選 -->
-  <div class="tag-filter" *ngIf="allTags.length">
-    <button class="tag-filter-btn" [class.active]="filterTagId === null"
-            (click)="setFilterTag(null)">全部</button>
-    <button class="tag-filter-btn" *ngFor="let t of allTags"
-            [class.active]="filterTagId === t.id"
-            [style.--tc]="t.color"
-            (click)="setFilterTag(t.id)">
-      <span class="tag-dot" [style.background]="t.color"></span>{{ t.name }}
-    </button>
+  <div class="filter-row">
+    <label class="chk">
+      <input type="checkbox" [(ngModel)]="onlyOverdue" />
+      只看超時 60m
+    </label>
+
+    <!-- 標籤篩選 -->
+    <div class="tag-filter" *ngIf="allTags.length">
+      <button class="tag-filter-btn" [class.active]="filterTagId === null"
+              (click)="setFilterTag(null)">全部</button>
+      <button class="tag-filter-btn" *ngFor="let t of allTags"
+              [class.active]="filterTagId === t.id"
+              [style.--tc]="t.color"
+              (click)="setFilterTag(t.id)">
+        <span class="tag-dot" [style.background]="t.color"></span>{{ t.name }}
+      </button>
+    </div>
   </div>
 
   <div class="hint" *ngIf="loading">

@@ -471,6 +471,49 @@ async def _insert_system_message(conn, conversation_id: int, ticket_id: int, tex
         )
 
 
+_FOLLOW_GREETING = "您好，很高興為您服務，請問有什麼可以協助您的呢？"
+
+
+# follow 事件後主動推送歡迎訊息，並將回覆記錄至 messages_raw
+async def _push_follow_greeting(channel_id: str, conversation_id: int, ticket_id: int):
+    # 1) 推送歡迎訊息
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers=_line_headers(),
+                json={
+                    "to": channel_id,
+                    "messages": [{"type": "text", "text": _FOLLOW_GREETING}],
+                },
+            )
+        if r.status_code != 200:
+            print(f"[WARN] follow greeting push failed: {r.status_code} {r.text}")
+            return
+    except Exception as e:
+        print(f"[WARN] follow greeting push error: {e}")
+        return
+
+    # 2) 將歡迎訊息記錄到 messages_raw（out 方向，讓客服對話視窗可見）
+    try:
+        ev_id = f"auto_greet_{ticket_id}_{int(time.time() * 1000)}"
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT IGNORE INTO messages_raw
+                      (event_id, conversation_id, ticket_id, line_message_id,
+                       direction, message_type, text, raw_json,
+                       sender_type, sender_name, created_at)
+                    VALUES (%s, %s, %s, NULL, 'out', 'text', %s, '{}', 'bot', '自動回覆', NOW())
+                    """,
+                    (ev_id, conversation_id, ticket_id, _FOLLOW_GREETING),
+                )
+            await conn.commit()
+    except Exception as e:
+        print(f"[WARN] follow greeting record failed: {e}")
+
+
 #async 推送 Quick Reply 的 helper function
 async def _send_quick_reply(channel_id: str, rule: dict):
     """
@@ -596,6 +639,10 @@ async def _handle_event(event: dict):
             elif event.get("type") == "follow":
                 await _insert_system_message(conn, conversation_id, ticket_id, "📲 客人重新加入 LINE@")
                 await touch_ticket_on_message(conn, ticket_id)
+                await conn.commit()
+                if channel_id:
+                    await _push_follow_greeting(channel_id, conversation_id, ticket_id)
+                return  # 已 commit，直接返回
 
             elif event.get("type") == "unfollow":
                 await _insert_system_message(conn, conversation_id, ticket_id, "⚠️ 客人已移除 LINE@，推播將無法送達")

@@ -1,0 +1,560 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: #070b12;
+  color: #e5e7eb;
+}
+
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+// ── 頁頭 ─────────────────────────────────────────────────────
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+
+  h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+  }
+}
+
+.ghost {
+  padding: 7px 14px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  &:hover { color: #e5e7eb; border-color: #475569; }
+}
+
+// ── 即時在線徽章 ──────────────────────────────────────────────
+
+.online-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  transition: border-color .3s, color .3s;
+
+  &.has-online {
+    border-color: #22c55e;
+    color: #86efac;
+  }
+}
+
+.online-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #334155;
+  flex-shrink: 0;
+
+  .has-online & {
+    background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, .5);
+    animation: pulse-green 1.5s infinite;
+  }
+}
+
+@keyframes pulse-green {
+  0%   { box-shadow: 0 0 0 0   rgba(34,197,94,.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0);  }
+  100% { box-shadow: 0 0 0 0   rgba(34,197,94,0);  }
+}
+
+// ── 日期篩選器 ────────────────────────────────────────────────
+
+.seg {
+  display: flex;
+  gap: 4px;
+
+  button {
+    padding: 6px 12px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    &:hover { color: #e5e7eb; }
+    &.active {
+      background: rgba(59, 130, 246, .15);
+      border-color: #3b82f6;
+      color: #93c5fd;
+      font-weight: 700;
+    }
+  }
+}
+
+// ── Tab 列 ───────────────────────────────────────────────────
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #1a2540;
+  padding-bottom: 2px;
+  flex-wrap: wrap;
+
+  button {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -3px;
+    border-radius: 4px 4px 0 0;
+    &:hover { color: #94a3b8; }
+    &.active {
+      color: #93c5fd;
+      border-bottom-color: #3b82f6;
+      font-weight: 700;
+    }
+  }
+}
+
+// ── 訊息 ─────────────────────────────────────────────────────
+
+.err { color: #f87171; font-size: 13px; margin-bottom: 12px; }
+
+.loading-row,
+.empty {
+  padding: 40px 0;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+// ── 摘要 ─────────────────────────────────────────────────────
+
+.summary {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 12px;
+
+  strong { color: #93c5fd; }
+}
+
+// ── KPI 卡片（概覽 tab）───────────────────────────────────────
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: #0b1220;
+  border: 1px solid #1a2540;
+  border-radius: 12px;
+  padding: 18px 16px;
+  text-align: center;
+
+  &.online-card { border-color: #14532d; background: #052a14; }
+}
+
+.kpi-val {
+  font-size: 28px;
+  font-weight: 800;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.kpi-label {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+  letter-spacing: .3px;
+}
+
+// ── 小節 ─────────────────────────────────────────────────────
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 10px;
+}
+
+// ── 即時在線清單 ──────────────────────────────────────────────
+
+.online-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.online-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #052a14;
+  border: 1px solid #14532d;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.online-page { color: #86efac; word-break: break-all; }
+.online-cnt  { color: #4ade80; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: 12px; }
+
+// ── 裝置比例條 ────────────────────────────────────────────────
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.device-label {
+  min-width: 72px;
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.device-bar-wrap {
+  flex: 1;
+  height: 10px;
+  background: #1e293b;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.device-bar {
+  height: 100%;
+  border-radius: 5px;
+  min-width: 2px;
+  transition: width .4s ease;
+}
+
+.device-pct {
+  min-width: 36px;
+  text-align: right;
+  color: #94a3b8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-cnt {
+  min-width: 44px;
+  text-align: right;
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+// ── Mini Top 5 清單 ───────────────────────────────────────────
+
+.mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mini-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #0b1220;
+  border: 1px solid #1a2540;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.mini-rank  { min-width: 20px; color: #475569; text-align: right; font-size: 11px; }
+.mini-path  { flex: 1; color: #cbd5e1; word-break: break-all; }
+.mini-views { color: #93c5fd; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+// ── 頁面表格 ─────────────────────────────────────────────────
+
+.table-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0b1220;
+  border: 1px solid #1a2540;
+  &:hover { background: #0d1830; }
+}
+
+.col-rank {
+  min-width: 28px;
+  text-align: right;
+  font-size: 12px;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.col-path {
+  flex: 1;
+  min-width: 0;
+}
+
+.path-text {
+  font-size: 14px;
+  color: #e5e7eb;
+  margin-bottom: 5px;
+  word-break: break-all;
+
+  &.ref-text {
+    font-size: 13px;
+    color: #94a3b8;
+  }
+}
+
+.bar-wrap {
+  height: 4px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 2px;
+  min-width: 2px;
+  transition: width .3s ease;
+
+  &.bar-ref { background: #8b5cf6; }
+}
+
+.col-num {
+  min-width: 56px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  color: #94a3b8;
+
+  &.views  { color: #93c5fd; }
+  &.uniq   { color: #6ee7b7; }
+  &.dur    { color: #fcd34d; font-size: 12px; }
+  &.bounce { color: #94a3b8; font-size: 12px; }
+}
+
+.high-bounce { color: #f87171 !important; }
+
+// ── 趨勢折線圖 ────────────────────────────────────────────────
+
+.chart-wrap {
+  background: #0b1220;
+  border: 1px solid #1a2540;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+
+  &.views-dot { background: #3b82f6; }
+  &.uniq-dot  { background: #22c55e; }
+}
+
+.line-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+
+  .grid-line {
+    stroke: #1e293b;
+    stroke-width: 1;
+  }
+
+  .area-views {
+    fill: rgba(59, 130, 246, .12);
+  }
+
+  .area-uniq {
+    fill: rgba(34, 197, 94, .08);
+  }
+
+  .line-views {
+    fill: none;
+    stroke: #3b82f6;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .line-uniq {
+    fill: none;
+    stroke: #22c55e;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .x-label {
+    font-size: 18px;
+    fill: #475569;
+  }
+}
+
+.daily-list {
+  margin-top: 16px;
+  border-top: 1px solid #1a2540;
+  padding-top: 12px;
+}
+
+.daily-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 80px;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #0f1a2e;
+  font-variant-numeric: tabular-nums;
+
+  &.header {
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    border-bottom-color: #1e293b;
+    padding-bottom: 8px;
+
+    span { text-align: right; &:first-child { text-align: left; } }
+  }
+
+  span { text-align: right; &:first-child { text-align: left; color: #94a3b8; } }
+}
+
+.views-val { color: #93c5fd; font-weight: 700; }
+.uniq-val  { color: #6ee7b7; font-weight: 700; }
+
+// ── Session 行為路徑 ──────────────────────────────────────────
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-card {
+  background: #0b1220;
+  border: 1px solid #1a2540;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.session-pages {
+  background: rgba(59,130,246,.15);
+  color: #93c5fd;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.session-dur  { color: #fcd34d; }
+.session-time { color: #475569; margin-left: auto; }
+
+.session-journey {
+  font-size: 12px;
+  color: #64748b;
+  word-break: break-all;
+  line-height: 1.7;
+  padding: 6px 8px;
+  background: #070b12;
+  border-radius: 6px;
+  border: 1px solid #1a2540;
+}
+
+// ── RWD ──────────────────────────────────────────────────────
+
+@media (max-width: 600px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .kpi-val { font-size: 22px; }
+
+  .col-num { min-width: 44px; font-size: 12px; }
+
+  .table-head .col-num:nth-child(n+4) { display: none; }
+  .item .col-num:nth-child(n+4) { display: none; }
+
+  .tab-bar button { padding: 7px 10px; font-size: 12px; }
+
+  .session-time { display: none; }
+}

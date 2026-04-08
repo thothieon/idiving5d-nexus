@@ -189,17 +189,12 @@
 
       <hr class="divider" />
 
-      <!-- 無 customer 提示（群組無法新增標籤/筆記） -->
-      <div class="empty-hint" *ngIf="customerId === null">
-        群組對話不支援標籤與筆記功能
-      </div>
-
-      <ng-container *ngIf="customerId !== null">
+      <ng-container *ngIf="customerId !== null || channelType === 'group' || channelType === 'room'">
 
         <!-- 標籤區塊 -->
         <div class="tag-section">
           <div class="tag-section-header">
-            <span class="info-label">客戶標籤</span>
+            <span class="info-label">{{ channelType === 'group' || channelType === 'room' ? '群組標籤' : '客戶標籤' }}</span>
             <button class="tag-edit-btn" (click)="tagPickerOpen = !tagPickerOpen">
               {{ tagPickerOpen ? '完成' : '編輯' }}
             </button>
@@ -207,11 +202,20 @@
 
           <!-- 已套用標籤 -->
           <div class="tag-row" *ngIf="!tagPickerOpen">
-            <span class="tag-badge" *ngFor="let t of customerTags"
-                  [style.background]="t.color + '30'"
-                  [style.border-color]="t.color"
-                  [style.color]="t.color">{{ t.name }}</span>
-            <span class="empty-hint inline" *ngIf="!customerTags.length">尚無標籤</span>
+            <ng-container *ngIf="channelType === 'group' || channelType === 'room'; else customerTagBadges">
+              <span class="tag-badge" *ngFor="let t of channelTags"
+                    [style.background]="t.color + '30'"
+                    [style.border-color]="t.color"
+                    [style.color]="t.color">{{ t.name }}</span>
+              <span class="empty-hint inline" *ngIf="!channelTags.length">尚無標籤</span>
+            </ng-container>
+            <ng-template #customerTagBadges>
+              <span class="tag-badge" *ngFor="let t of customerTags"
+                    [style.background]="t.color + '30'"
+                    [style.border-color]="t.color"
+                    [style.color]="t.color">{{ t.name }}</span>
+              <span class="empty-hint inline" *ngIf="!customerTags.length">尚無標籤</span>
+            </ng-template>
           </div>
 
           <!-- 標籤選擇器 -->

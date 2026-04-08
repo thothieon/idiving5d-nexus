@@ -197,7 +197,7 @@ export class CourseScheduleComponent implements OnInit {
     this.confirmDeleteId = null;
     this.api.deleteCourseSchedule(id).subscribe({
       next: () => { this.flash('已刪除'); this.load(); },
-      error: () => { this.flash('刪除失敗', true); },
+      error: () => { this.flash('刪除失敗', true); this.cdr.detectChanges(); },
     });
   }
 
@@ -218,10 +218,12 @@ export class CourseScheduleComponent implements OnInit {
   private flash(msg: string, isErr = false) {
     if (isErr) {
       this.errorMsg = msg;
-      setTimeout(() => { this.errorMsg = ''; }, 3000);
+      this.cdr.detectChanges();
+      setTimeout(() => { this.errorMsg = ''; this.cdr.detectChanges(); }, 3000);
     } else {
       this.successMsg = msg;
-      setTimeout(() => { this.successMsg = ''; }, 3000);
+      this.cdr.detectChanges();
+      setTimeout(() => { this.successMsg = ''; this.cdr.detectChanges(); }, 3000);
     }
   }
 }

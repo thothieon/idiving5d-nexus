@@ -1,0 +1,207 @@
+<div class="page">
+
+  <!-- ── 頁頭 ─────────────────────────────────────────────── -->
+  <div class="page-header">
+    <button class="ghost" (click)="back()">← 返回</button>
+    <h1>官網頁面分析</h1>
+
+    <div class="online-badge" [class.has-online]="online > 0">
+      <span class="online-dot"></span>
+      即時 {{ online }} 人在線
+    </div>
+
+    <div class="seg">
+      <button *ngFor="let d of dayOptions" [class.active]="days === d" (click)="setDays(d)">
+        近 {{ d }} 天
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Tab 切換 ─────────────────────────────────────────── -->
+  <div class="tab-bar">
+    <button [class.active]="tab==='overview'"  (click)="setTab('overview')">概覽</button>
+    <button [class.active]="tab==='pages'"     (click)="setTab('pages')">頁面</button>
+    <button [class.active]="tab==='daily'"     (click)="setTab('daily')">趨勢</button>
+    <button [class.active]="tab==='referrers'" (click)="setTab('referrers')">來源</button>
+    <button [class.active]="tab==='sessions'"  (click)="setTab('sessions')">行為路徑</button>
+  </div>
+
+  <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
+  <div class="loading-row" *ngIf="loading">讀取中…</div>
+
+  <!-- ══ 概覽 tab ════════════════════════════════════════════ -->
+  <div *ngIf="tab === 'overview' && !loading">
+
+    <!-- 總覽數字 -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-val">{{ totalViews | number }}</div>
+        <div class="kpi-label">總瀏覽次數</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">{{ pages.length }}</div>
+        <div class="kpi-label">不同頁面數</div>
+      </div>
+      <div class="kpi-card online-card">
+        <div class="kpi-val">{{ online }}</div>
+        <div class="kpi-label">現在在線</div>
+      </div>
+    </div>
+
+    <!-- 即時在線分布 -->
+    <div class="section" *ngIf="online > 0">
+      <div class="section-title">即時在線頁面分布</div>
+      <div class="online-list">
+        <div class="online-row" *ngFor="let p of onlinePages">
+          <span class="online-page">{{ p.page_path }}</span>
+          <span class="online-cnt">{{ p.cnt }} 人</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 裝置比例 -->
+    <div class="section" *ngIf="devices.length">
+      <div class="section-title">裝置比例</div>
+      <div class="device-list">
+        <div class="device-row" *ngFor="let d of devices">
+          <span class="device-label">{{ deviceLabel(d.device_type) }}</span>
+          <div class="device-bar-wrap">
+            <div class="device-bar"
+                 [style.width.%]="devicePct(d.views)"
+                 [style.background]="deviceColor(d.device_type)">
+            </div>
+          </div>
+          <span class="device-pct">{{ devicePct(d.views) }}%</span>
+          <span class="device-cnt">{{ d.views }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top 5 熱門頁面 -->
+    <div class="section" *ngIf="pages.length">
+      <div class="section-title">熱門頁面 Top 5</div>
+      <div class="mini-list">
+        <div class="mini-item" *ngFor="let p of pages.slice(0,5); let i = index">
+          <span class="mini-rank">{{ i+1 }}</span>
+          <span class="mini-path">{{ p.page_path }}</span>
+          <span class="mini-views">{{ p.views }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 頁面 tab ════════════════════════════════════════════ -->
+  <div *ngIf="tab === 'pages' && !loading">
+    <div class="summary">共 <strong>{{ totalViews | number }}</strong> 次瀏覽・<strong>{{ pages.length }}</strong> 個頁面</div>
+
+    <div class="table-head">
+      <span class="col-rank">#</span>
+      <span class="col-path">頁面</span>
+      <span class="col-num">瀏覽</span>
+      <span class="col-num">獨立 IP</span>
+      <span class="col-num">均停留</span>
+      <span class="col-num">跳出率</span>
+    </div>
+
+    <div class="empty" *ngIf="!pages.length">近 {{ days }} 天沒有資料</div>
+
+    <div class="list">
+      <div class="item" *ngFor="let p of pages; let i = index">
+        <span class="col-rank">{{ i+1 }}</span>
+        <div class="col-path">
+          <div class="path-text">{{ p.page_path }}</div>
+          <div class="bar-wrap">
+            <div class="bar" [style.width.%]="(p.views / maxPageViews) * 100"></div>
+          </div>
+        </div>
+        <span class="col-num views">{{ p.views }}</span>
+        <span class="col-num uniq">{{ p.uniques }}</span>
+        <span class="col-num dur">{{ fmtDur(p.avg_duration) }}</span>
+        <span class="col-num bounce" [class.high-bounce]="(p.bounce_pct ?? 0) > 70">
+          {{ p.bounce_pct != null ? (p.bounce_pct + '%') : '—' }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 趨勢 tab ════════════════════════════════════════════ -->
+  <div *ngIf="tab === 'daily' && !loading">
+    <div class="empty" *ngIf="daily.length < 2">資料不足，無法繪製圖表</div>
+
+    <div class="chart-wrap" *ngIf="daily.length >= 2">
+      <div class="chart-legend">
+        <span class="legend-dot views-dot"></span> 瀏覽
+        <span class="legend-dot uniq-dot"></span> 獨立 IP
+      </div>
+
+      <svg class="line-chart" viewBox="0 0 600 110" preserveAspectRatio="none">
+        <!-- 格線 -->
+        <line x1="0" y1="25"  x2="600" y2="25"  class="grid-line"/>
+        <line x1="0" y1="50"  x2="600" y2="50"  class="grid-line"/>
+        <line x1="0" y1="75"  x2="600" y2="75"  class="grid-line"/>
+        <line x1="0" y1="100" x2="600" y2="100" class="grid-line"/>
+
+        <!-- 面積填充 -->
+        <path [attr.d]="areaPath('views')"   class="area-views"/>
+        <path [attr.d]="areaPath('uniques')" class="area-uniq"/>
+
+        <!-- 折線 -->
+        <polyline [attr.points]="linePoints('views')"   class="line-views"/>
+        <polyline [attr.points]="linePoints('uniques')" class="line-uniq"/>
+
+        <!-- X 軸日期標籤 -->
+        <text *ngFor="let lbl of xLabels()"
+              [attr.x]="lbl.x" y="115"
+              class="x-label" text-anchor="middle">{{ lbl.label }}</text>
+      </svg>
+
+      <div class="daily-list">
+        <div class="daily-row header">
+          <span>日期</span><span>瀏覽</span><span>獨立 IP</span>
+        </div>
+        <div class="daily-row" *ngFor="let d of daily.slice().reverse().slice(0, 14)">
+          <span>{{ d.date.slice(5) }}</span>
+          <span class="views-val">{{ d.views }}</span>
+          <span class="uniq-val">{{ d.uniques }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 來源 tab ════════════════════════════════════════════ -->
+  <div *ngIf="tab === 'referrers' && !loading">
+    <div class="empty" *ngIf="!refs.length">近 {{ days }} 天沒有來源資料</div>
+
+    <div class="list" *ngIf="refs.length">
+      <div class="item" *ngFor="let r of refs; let i = index">
+        <span class="col-rank">{{ i+1 }}</span>
+        <div class="col-path">
+          <div class="path-text ref-text">{{ r.referrer }}</div>
+          <div class="bar-wrap">
+            <div class="bar bar-ref" [style.width.%]="(r.views / maxRefViews) * 100"></div>
+          </div>
+        </div>
+        <span class="col-num views">{{ r.views }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 行為路徑 tab ════════════════════════════════════════ -->
+  <div *ngIf="tab === 'sessions' && !loading">
+    <div class="empty" *ngIf="!sessions.length">
+      近 {{ days }} 天沒有多頁行為資料（需要有 session_id 的訪客）
+    </div>
+
+    <div class="session-list" *ngIf="sessions.length">
+      <div class="session-card" *ngFor="let s of sessions">
+        <div class="session-meta">
+          <span class="session-pages">{{ s.page_count }} 頁</span>
+          <span class="session-dur">{{ fmtDur(s.duration_sec) }}</span>
+          <span class="session-time">{{ fmtDate(s.start_at) }}</span>
+        </div>
+        <div class="session-journey">{{ s.journey }}</div>
+      </div>
+    </div>
+  </div>
+
+</div>

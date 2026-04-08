@@ -90,6 +90,35 @@ export class AdminApiService {
     return this.http.get<any>(`${this.base}/stats/questions`, { params });
   }
 
+  statsPageViews(days: number, limit = 100): Observable<any> {
+    const params = new HttpParams().set('days', String(days)).set('limit', String(limit));
+    return this.http.get<any>(`${this.base}/stats/pageviews`, { params });
+  }
+
+  statsPageViewsDaily(days: number): Observable<any> {
+    const params = new HttpParams().set('days', String(days));
+    return this.http.get<any>(`${this.base}/stats/pageviews/daily`, { params });
+  }
+
+  statsPageViewsReferrers(days: number): Observable<any> {
+    const params = new HttpParams().set('days', String(days));
+    return this.http.get<any>(`${this.base}/stats/pageviews/referrers`, { params });
+  }
+
+  statsPageViewsDevices(days: number): Observable<any> {
+    const params = new HttpParams().set('days', String(days));
+    return this.http.get<any>(`${this.base}/stats/pageviews/devices`, { params });
+  }
+
+  statsPageViewsSessions(days: number): Observable<any> {
+    const params = new HttpParams().set('days', String(days));
+    return this.http.get<any>(`${this.base}/stats/pageviews/sessions`, { params });
+  }
+
+  statsPageViewsOnline(): Observable<any> {
+    return this.http.get<any>(`${this.base}/stats/pageviews/online`);
+  }
+
   // ── 系統 ──────────────────────────────────────────────────
 
   me() {
@@ -183,8 +212,16 @@ export class AdminApiService {
 
   // ── 客戶筆記 ─────────────────────────────────────────────
 
-  getNotes(ticketId: number): Observable<{ customer_id: number | null; customer_name: string | null; channel_type: string | null; items: CustomerNote[] }> {
+  getNotes(ticketId: number): Observable<{ customer_id: number | null; customer_name: string | null; channel_type: string | null; channel_id: string | null; items: CustomerNote[] }> {
     return this.http.get<any>(`${this.base}/tickets/${ticketId}/notes`);
+  }
+
+  getChannelTags(channelType: string, channelId: string): Observable<Tag[]> {
+    return this.http.get<any>(`${this.base}/channels/${channelType}/${channelId}/tags`).pipe(map(r => r.items ?? []));
+  }
+
+  setChannelTags(channelType: string, channelId: string, tagIds: number[]): Observable<any> {
+    return this.http.put<any>(`${this.base}/channels/${channelType}/${channelId}/tags`, { tag_ids: tagIds });
   }
 
   createNote(ticketId: number, note: string): Observable<any> {

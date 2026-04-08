@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -22,6 +22,7 @@ export class AdminLoginComponent {
     private tokenSvc: AdminTokenService,
     private api: AdminApiService,
     private router: Router,
+    private cdr: ChangeDetectorRef,
   ) {}
 
   login() {
@@ -31,6 +32,7 @@ export class AdminLoginComponent {
     if (!u || !p) { this.errorMsg = '帳號與密碼不可空白'; return; }
 
     this.loading = true;
+    this.cdr.detectChanges();
     this.api.login(u, p).subscribe({
       next: (res) => {
         this.loading = false;
@@ -40,6 +42,7 @@ export class AdminLoginComponent {
       error: (err) => {
         this.loading = false;
         this.errorMsg = err?.error?.detail ?? '帳號或密碼錯誤';
+        this.cdr.detectChanges();
       },
     });
   }

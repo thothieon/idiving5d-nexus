@@ -66,12 +66,14 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   // ── 標籤 ────────────────────────────────────────────────
   allTags:        Tag[] = [];
   customerTags:   Tag[] = [];
+  channelTags:    Tag[] = [];
   tagPickerOpen         = false;
   tagSaving             = false;
 
   // ── 自訂名稱 ─────────────────────────────────────────────
   storedCustomerName: string | null = null;
   channelType: string | null = null;
+  channelId:   string | null = null;
   editingCustomerName    = false;
   customerNameDraft      = '';
   customerNameSaving     = false;
@@ -190,8 +192,10 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         this.customerId         = res.customer_id;
         this.storedCustomerName = res.customer_name ?? null;
         this.channelType        = res.channel_type ?? null;
+        this.channelId          = res.channel_id   ?? null;
         this.notes              = res.items ?? [];
         if (this.customerId) this.loadCustomerTags();
+        if (this.channelType === 'group' || this.channelType === 'room') this.loadChannelTags();
       },
     });
   }
@@ -207,20 +211,48 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     });
   }
 
+  loadChannelTags() {
+    if (!this.channelType || !this.channelId) return;
+    this.api.getChannelTags(this.channelType, this.channelId).subscribe({
+      next: tags => this.channelTags = tags,
+    });
+  }
+
   isTagSelected(tag: Tag): boolean {
+    if (this.channelType === 'group' || this.channelType === 'room') {
+      return this.channelTags.some(t => t.id === tag.id);
+    }
     return this.customerTags.some(t => t.id === tag.id);
   }
 
   toggleTag(tag: Tag) {
-    if (!this.customerId || this.tagSaving) return;
-    const ids = this.isTagSelected(tag)
-      ? this.customerTags.filter(t => t.id !== tag.id).map(t => t.id)
-      : [...this.customerTags.map(t => t.id), tag.id];
-    this.tagSaving = true;
-    this.api.setCustomerTags(this.customerId, ids).subscribe({
-      next: () => { this.tagSaving = false; this.loadCustomerTags(); },
-      error: () => { this.tagSaving = false; },
-    });
+    if (this.tagSaving) return;
+    this.errorMsg = '';
+    if (this.channelType === 'group' || this.channelType === 'room') {
+      if (!this.channelId) {
+        this.errorMsg = '無法取得頻道 ID，請重新整理頁面';
+        console.error('toggleTag: channelId is null, channelType=', this.channelType);
+        return;
+      }
+      const ids = this.isTagSelected(tag)
+        ? this.channelTags.filter(t => t.id !== tag.id).map(t => t.id)
+        : [...this.channelTags.map(t => t.id), tag.id];
+      this.tagSaving = true;
+      this.api.setChannelTags(this.channelType, this.channelId, ids).subscribe({
+        next: () => { this.tagSaving = false; this.loadChannelTags(); this.cdr.detectChanges(); },
+        error: (e) => { this.tagSaving = false; this.errorMsg = e?.error?.detail ?? '標籤儲存失敗'; this.cdr.detectChanges(); },
+      });
+    } else {
+      if (!this.customerId) return;
+      const ids = this.isTagSelected(tag)
+        ? this.customerTags.filter(t => t.id !== tag.id).map(t => t.id)
+        : [...this.customerTags.map(t => t.id), tag.id];
+      this.tagSaving = true;
+      this.api.setCustomerTags(this.customerId, ids).subscribe({
+        next: () => { this.tagSaving = false; this.loadCustomerTags(); this.cdr.detectChanges(); },
+        error: (e) => { this.tagSaving = false; this.errorMsg = e?.error?.detail ?? '標籤儲存失敗'; this.cdr.detectChanges(); },
+      });
+    }
   }
 
   startEditCustomerName() {
@@ -237,15 +269,18 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     if (this.customerNameSaving) return;
     const name = this.customerNameDraft.trim() || null;
     this.customerNameSaving = true;
+    this.cdr.detectChanges();
     this.api.updateTicketCustomName(this.ticketId, name).subscribe({
       next: () => {
         this.storedCustomerName  = name;
         this.customerNameSaving  = false;
         this.editingCustomerName = false;
+        this.cdr.detectChanges();
       },
       error: () => {
         this.customerNameSaving  = false;
         this.errorMsg = '儲存自訂名稱失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -334,10 +369,12 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         this.transitioning = false;
         this.loadStatus();
         this.loadHistory();
+        this.cdr.detectChanges();
       },
       error: err => {
         this.transitioning = false;
         this.errorMsg = err?.error?.detail || '狀態切換失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -353,10 +390,12 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         this.noteDraft      = '';
         this.noteSubmitting = false;
         this.loadNotes();
+        this.cdr.detectChanges();
       },
       error: () => {
         this.noteSubmitting = false;
         this.errorMsg = '新增筆記失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -378,16 +417,17 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
       next: () => {
         this.cancelEdit();
         this.loadNotes();
+        this.cdr.detectChanges();
       },
-      error: () => this.errorMsg = '更新筆記失敗',
+      error: () => { this.errorMsg = '更新筆記失敗'; this.cdr.detectChanges(); },
     });
   }
 
   deleteNote(n: CustomerNote) {
     if (!confirm('確定刪除這則筆記？')) return;
     this.api.deleteNote(this.ticketId, n.id).subscribe({
-      next:  () => this.loadNotes(),
-      error: () => this.errorMsg = '刪除筆記失敗',
+      next:  () => { this.loadNotes(); this.cdr.detectChanges(); },
+      error: () => { this.errorMsg = '刪除筆記失敗'; this.cdr.detectChanges(); },
     });
   }
 
@@ -431,11 +471,13 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
         this.paymentDue    = '';
         this.paymentMsg    = '✅ 訂單已建立，繳費通知已推送給客人';
         this.loadPaymentOrders();
-        setTimeout(() => this.paymentMsg = '', 4000);
+        this.cdr.detectChanges();
+        setTimeout(() => { this.paymentMsg = ''; this.cdr.detectChanges(); }, 4000);
       },
       error: e => {
         this.paymentSaving = false;
         this.paymentErr    = e?.error?.detail ?? '建立失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -443,16 +485,16 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   verifyOrder(orderId: number) {
     if (!confirm('確定手動標記為已收款？')) return;
     this.api.verifyPaymentOrder(orderId).subscribe({
-      next: () => this.loadPaymentOrders(),
-      error: e => this.paymentErr = e?.error?.detail ?? '操作失敗',
+      next: () => { this.loadPaymentOrders(); this.cdr.detectChanges(); },
+      error: e => { this.paymentErr = e?.error?.detail ?? '操作失敗'; this.cdr.detectChanges(); },
     });
   }
 
   cancelOrder(orderId: number) {
     if (!confirm('確定取消此訂單？')) return;
     this.api.cancelPaymentOrder(orderId).subscribe({
-      next: () => this.loadPaymentOrders(),
-      error: e => this.paymentErr = e?.error?.detail ?? '操作失敗',
+      next: () => { this.loadPaymentOrders(); this.cdr.detectChanges(); },
+      error: e => { this.paymentErr = e?.error?.detail ?? '操作失敗'; this.cdr.detectChanges(); },
     });
   }
 

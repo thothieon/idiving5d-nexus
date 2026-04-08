@@ -311,8 +311,60 @@ async def list_active_tickets(
             )
             rows = await cur.fetchall()
 
+        # 批量載入客戶標籤
+        async with conn.cursor() as cur:
+            customer_ids = list({r["channel_id"] for r in rows
+                                 if r.get("channel_type") == "user" and r.get("channel_id")})
+            tags_map: dict[str, list] = {}
+            if customer_ids:
+                ph = ",".join(["%s"] * len(customer_ids))
+                await cur.execute(
+                    f"""
+                    SELECT cu.line_user_id, t.id, t.name, t.color
+                    FROM customers cu
+                    JOIN customer_tag_map ctm ON ctm.customer_id = cu.id
+                    JOIN tags t ON ctm.tag_id = t.id
+                    WHERE cu.line_user_id IN ({ph})
+                    ORDER BY t.name
+                    """,
+                    customer_ids,
+                )
+                for tr in await cur.fetchall():
+                    tags_map.setdefault(tr["line_user_id"], []).append(
+                        {"id": tr["id"], "name": tr["name"], "color": tr["color"]}
+                    )
+
+            # 批量載入頻道標籤（group / room）
+            channel_keys = list({
+                (r["channel_type"], r["channel_id"])
+                for r in rows
+                if r.get("channel_type") in ("group", "room") and r.get("channel_id")
+            })
+            channel_tags_map: dict[tuple, list] = {}
+            for ch_type, ch_id in channel_keys:
+                await cur.execute(
+                    """
+                    SELECT t.id, t.name, t.color
+                    FROM channel_tag_map ctm
+                    JOIN tags t ON ctm.tag_id = t.id
+                    WHERE ctm.channel_type = %s AND ctm.channel_id = %s
+                    ORDER BY t.name
+                    """,
+                    (ch_type, ch_id),
+                )
+                channel_tags_map[(ch_type, ch_id)] = [
+                    {"id": tr["id"], "name": tr["name"], "color": tr["color"]}
+                    for tr in await cur.fetchall()
+                ]
+
         for r in rows:
             r["status_label"] = STATUS_LABEL.get(r["current_status"], r["current_status"])
             r["is_overdue"]   = (r["minutes_since_last_message"] or 0) > 60
+            if r.get("channel_type") == "user":
+                r["tags"] = tags_map.get(r.get("channel_id"), [])
+            elif r.get("channel_type") in ("group", "room") and r.get("channel_id"):
+                r["tags"] = channel_tags_map.get((r["channel_type"], r["channel_id"]), [])
+            else:
+                r["tags"] = []
 
         return {"ok": True, "items": rows, "limit": limit, "offset": offset}

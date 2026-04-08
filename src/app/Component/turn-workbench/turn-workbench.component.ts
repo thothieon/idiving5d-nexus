@@ -117,7 +117,7 @@ export class TurnWorkbenchComponent implements OnInit {
     this.router.navigateByUrl('/admin/courses');
   }
 
-  filtered(arr: any[], status: string) {
+filtered(arr: any[], status: string) {
     const q = (this.search || '').trim().toLowerCase();
 
     return (arr || [])
@@ -145,7 +145,7 @@ export class TurnWorkbenchComponent implements OnInit {
   // ── 標籤管理 ─────────────────────────────────────────────
 
   loadTags() {
-    this.api.listTags().subscribe({ next: tags => this.allTags = tags });
+    this.api.listTags().subscribe({ next: tags => { this.allTags = tags; this.cdr.detectChanges(); } });
   }
 
   setFilterTag(id: number | null) {
@@ -165,10 +165,12 @@ export class TurnWorkbenchComponent implements OnInit {
         this.tagSaving  = false;
         this.newTagName = '';
         this.loadTags();
+        this.cdr.detectChanges();
       },
       error: e => {
         this.tagSaving = false;
         this.tagErr    = e?.error?.detail ?? '建立失敗';
+        this.cdr.detectChanges();
       },
     });
   }
@@ -180,6 +182,7 @@ export class TurnWorkbenchComponent implements OnInit {
         if (this.filterTagId === tag.id) this.filterTagId = null;
         this.loadTags();
         this.refreshTrigger$.next();
+        this.cdr.detectChanges();
       },
     });
   }

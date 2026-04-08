@@ -395,8 +395,37 @@ async def list_tickets(
                     tags_map.setdefault(cid, []).append(
                         {"id": tr["id"], "name": tr["name"], "color": tr["color"]}
                     )
+
+            # 批量載入頻道標籤（group / room）
+            channel_keys = list({
+                (r["channel_type"], r["channel_id"])
+                for r in rows
+                if r.get("channel_type") in ("group", "room") and r.get("channel_id")
+            })
+            channel_tags_map: dict[tuple, list] = {}
+            for ch_type, ch_id in channel_keys:
+                await cur.execute(
+                    """
+                    SELECT t.id, t.name, t.color
+                    FROM channel_tag_map ctm
+                    JOIN tags t ON ctm.tag_id = t.id
+                    WHERE ctm.channel_type = %s AND ctm.channel_id = %s
+                    ORDER BY t.name
+                    """,
+                    (ch_type, ch_id),
+                )
+                channel_tags_map[(ch_type, ch_id)] = [
+                    {"id": tr["id"], "name": tr["name"], "color": tr["color"]}
+                    for tr in await cur.fetchall()
+                ]
+
             for r in rows:
-                r["tags"] = tags_map.get(r.get("customer_id"), [])
+                if r.get("customer_id"):
+                    r["tags"] = tags_map.get(r["customer_id"], [])
+                elif r.get("channel_type") in ("group", "room") and r.get("channel_id"):
+                    r["tags"] = channel_tags_map.get((r["channel_type"], r["channel_id"]), [])
+                else:
+                    r["tags"] = []
 
         await conn.commit()
         return {"ok": True, "items": rows, "limit": limit, "offset": offset}
@@ -839,7 +868,7 @@ async def list_ticket_notes(ticket_id: int, staff: dict = Depends(get_current_st
             ch = await cur.fetchone()
 
         if not ch:
-            return {"ok": True, "customer_id": None, "customer_name": None, "items": []}
+            return {"ok": True, "customer_id": None, "customer_name": None, "channel_type": None, "channel_id": None, "items": []}
 
         customer_id  = ch.get("customer_id")
         channel_type = ch.get("channel_type")
@@ -873,6 +902,7 @@ async def list_ticket_notes(ticket_id: int, staff: dict = Depends(get_current_st
             "customer_id": customer_id,
             "customer_name": customer_name,
             "channel_type": channel_type,
+            "channel_id": channel_id,
             "items": rows,
         }
 

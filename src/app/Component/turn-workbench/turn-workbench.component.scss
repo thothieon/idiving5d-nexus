@@ -46,14 +46,17 @@
 }
 
 .kpi {
-  background: #0b1220;
-  border: 1px solid #1f2a44;
-  border-radius: 16px;
-  padding: 12px;
+  display:     flex;
+  align-items: baseline;
+  gap:         6px;
+  background:  #0b1220;
+  border:      1px solid #1f2a44;
+  border-radius: 12px;
+  padding:     8px 12px;
 }
 
-.kpi .num { font-size: 22px; font-weight: 900; }
-.kpi .label { color: #94a3b8; font-size: 12px; margin-top: 4px; }
+.kpi .num   { font-size: 18px; font-weight: 900; }
+.kpi .label { color: #94a3b8; font-size: 12px; }
 .kpi.danger { border-color: rgba(248,113,113,.45); }
 
 .controls {
@@ -92,13 +95,21 @@ input {
   outline: none;
 }
 
-.chk {
-  display: flex;
+.filter-row {
+  display:     flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  color: #cbd5e1;
-  font-size: 13px;
+  gap:         12px;
+  margin-top:  10px;
+  flex-wrap:   wrap;
+}
+
+.chk {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  color:       #cbd5e1;
+  font-size:   13px;
+  flex-shrink: 0;
 }
 
 .hint {
@@ -176,7 +187,6 @@ h2 {
   display:   flex;
   flex-wrap: wrap;
   gap:       6px;
-  margin-top: 8px;
 }
 
 .tag-filter-btn {

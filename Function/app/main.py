@@ -17,6 +17,8 @@ from app.routes_liff       import router as liff_router
 from app.routes_tags       import router as tags_router
 from app.routes_courses    import public_router as courses_public_router
 from app.routes_courses    import admin_router  as courses_admin_router
+from app.routes_pageviews  import public_router as pageviews_public_router
+from app.routes_pageviews  import admin_router  as pageviews_admin_router
 
 
 # 應用程式生命週期管理：啟動時建立 DB 連線池，關閉時釋放
@@ -47,8 +49,10 @@ app.include_router(crawler_router,    prefix="/internal")
 app.include_router(payment_router,    prefix="/admin/api")
 app.include_router(liff_router,       prefix="/liff")
 app.include_router(tags_router,           prefix="/admin/api")
-app.include_router(courses_public_router, prefix="/api")
-app.include_router(courses_admin_router,  prefix="/admin/api")
+app.include_router(courses_public_router,   prefix="/api")
+app.include_router(courses_admin_router,    prefix="/admin/api")
+app.include_router(pageviews_public_router, prefix="/api")
+app.include_router(pageviews_admin_router,  prefix="/admin/api")
 
 
 # 根路由：確認服務是否正常運行

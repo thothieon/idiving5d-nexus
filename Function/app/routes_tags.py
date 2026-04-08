@@ -1,9 +1,11 @@
-# app/routes_tags.py  ── 客戶標籤管理
-from fastapi import APIRouter, Depends, HTTPException
+# app/routes_tags.py  ── 客戶與頻道標籤管理
+from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel
 
 from app.db import get_conn
 from app.auth_staff import get_current_staff, require_admin_staff
+
+_VALID_CHANNEL_TYPES = {"group", "room"}
 
 router = APIRouter()
 
@@ -62,6 +64,9 @@ async def delete_tag(tag_id: int, staff: dict = Depends(get_current_staff)):
             await cur.execute(
                 "DELETE FROM customer_tag_map WHERE tag_id=%s", (tag_id,)
             )
+            await cur.execute(
+                "DELETE FROM channel_tag_map WHERE tag_id=%s", (tag_id,)
+            )
             await cur.execute("DELETE FROM tags WHERE id=%s", (tag_id,))
         await conn.commit()
     return {"ok": True}
@@ -107,6 +112,59 @@ async def set_customer_tags(
                     "INSERT IGNORE INTO customer_tag_map (customer_id, tag_id, assigned_by)"
                     " VALUES (%s, %s, %s)",
                     [(customer_id, tid, staff_id) for tid in body.tag_ids],
+                )
+        await conn.commit()
+    return {"ok": True}
+
+
+# ── 取得某群組/聊天室的標籤（所有客服）──────────────────────
+@router.get("/channels/{channel_type}/{channel_id}/tags")
+async def get_channel_tags(
+    channel_type: str = Path(...),
+    channel_id:   str = Path(...),
+    staff: dict = Depends(get_current_staff),
+):
+    if channel_type not in _VALID_CHANNEL_TYPES:
+        raise HTTPException(status_code=400, detail="channel_type 必須為 group 或 room")
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT t.id, t.name, t.color
+                FROM channel_tag_map ctm
+                JOIN tags t ON ctm.tag_id = t.id
+                WHERE ctm.channel_type = %s AND ctm.channel_id = %s
+                ORDER BY t.name
+                """,
+                (channel_type, channel_id),
+            )
+            rows = await cur.fetchall()
+    return {"ok": True, "items": rows}
+
+
+# ── 設定某群組/聊天室的標籤（全量替換，所有客服）────────────
+@router.put("/channels/{channel_type}/{channel_id}/tags")
+async def set_channel_tags(
+    body: TagSetBody,
+    channel_type: str = Path(...),
+    channel_id:   str = Path(...),
+    staff: dict = Depends(get_current_staff),
+):
+    if channel_type not in _VALID_CHANNEL_TYPES:
+        raise HTTPException(status_code=400, detail="channel_type 必須為 group 或 room")
+    staff_id = staff.get("id")
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM channel_tag_map WHERE channel_type=%s AND channel_id=%s",
+                (channel_type, channel_id),
+            )
+            if body.tag_ids:
+                await cur.executemany(
+                    "INSERT IGNORE INTO channel_tag_map"
+                    " (channel_type, channel_id, tag_id, assigned_by)"
+                    " VALUES (%s, %s, %s, %s)",
+                    [(channel_type, channel_id, tid, staff_id) for tid in body.tag_ids],
                 )
         await conn.commit()
     return {"ok": True}

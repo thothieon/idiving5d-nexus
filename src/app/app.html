@@ -11,6 +11,7 @@
         <a routerLink="/admin/turn" class="link">🎫 客服後台</a>
         <a routerLink="/admin/questions" class="link" *ngIf="isAdmin()">問題蒐集</a>
         <a routerLink="/admin/courses" class="link" *ngIf="isAdmin()">課程排程</a>
+        <a routerLink="/admin/pagestats" class="link" *ngIf="isAdmin()">📊 頁面分析</a>
         <a routerLink="/admin/staff" class="link" *ngIf="isAdmin()">👥 帳號管理</a>
         <button class="ghost" (click)="clearToken()">登出</button>
       </ng-container>
