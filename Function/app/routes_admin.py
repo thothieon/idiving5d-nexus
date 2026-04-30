@@ -9,7 +9,9 @@ import httpx
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+import uuid
+import mimetypes
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
 from fastapi.responses import FileResponse
 
 from app.db import get_conn
@@ -22,6 +24,9 @@ LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").stri
 LINE_PUSH_API    = "https://api.line.me/v2/bot/message/push"
 LINE_CONTENT_DIR = os.environ.get("LINE_CONTENT_DIR", "/app/data/line_content").strip() or "/app/data/line_content"
 LINE_EMOJI_DIR   = os.environ.get("LINE_EMOJI_DIR",   "/app/data/line_emoji").strip()   or "/app/data/line_emoji"
+PUBLIC_BASE_URL  = os.environ.get("PUBLIC_BASE_URL",  "").strip().rstrip("/")
+
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 _MIME_EXT = {
     "image/jpeg":   ".jpg",
@@ -52,6 +57,25 @@ async def line_push(user_id_or_group_id: str, text: str):
         return (r.status_code, r.text, payload)
     except Exception as e:
         return (500, str(e), payload)
+
+
+async def line_push_image(channel_id: str, original_url: str, preview_url: str):
+    """推送圖片訊息到 LINE（originalContentUrl / previewImageUrl 必須為公開 HTTPS）"""
+    payload = {
+        "to": channel_id,
+        "messages": [{
+            "type": "image",
+            "originalContentUrl": original_url,
+            "previewImageUrl":    preview_url,
+        }],
+    }
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(LINE_PUSH_API, json=payload, headers=headers)
+        return r.status_code, r.text, payload
+    except Exception as e:
+        return 500, str(e), payload
 
 
 # 清理並截斷 ticket 主旨字串至最大長度
@@ -296,12 +320,16 @@ class StaffCreateBody(BaseModel):
     username: str
     password: str
     role: str = "staff"   # "admin" | "staff"
+    email: str | None = None
+    permissions: dict | None = None
 
 class StaffUpdateBody(BaseModel):
     name: str | None = None
     username: str | None = None
     role: str | None = None
     is_active: int | None = None   # 1 啟用 / 0 停用
+    email: str | None = None
+    permissions: dict | None = None
 
 class StaffSetPasswordBody(BaseModel):
     password: str
@@ -491,6 +519,95 @@ async def reply_ticket(ticket_id: int, body: ReplyBody, staff: dict = Depends(ge
         return result
 
 
+# 客服上傳圖片並推送到 LINE
+@router.post("/tickets/{ticket_id}/reply_image")
+async def reply_ticket_image(
+    ticket_id: int,
+    file: UploadFile = File(...),
+    staff: dict = Depends(get_current_staff),
+):
+    if not PUBLIC_BASE_URL:
+        raise HTTPException(status_code=503, detail="PUBLIC_BASE_URL 未設定，無法傳送圖片")
+
+    # 驗證 MIME
+    mime = (file.content_type or "").split(";")[0].strip().lower()
+    if mime not in _ALLOWED_IMAGE_MIMES:
+        ext  = os.path.splitext(file.filename or "")[1].lower()
+        mime = mimetypes.guess_type(f"f{ext}")[0] or ""
+    if mime not in _ALLOWED_IMAGE_MIMES:
+        raise HTTPException(status_code=400, detail="僅支援 JPEG / PNG / GIF / WEBP 圖片")
+
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="圖片不得超過 10 MB")
+
+    # 存檔
+    ext      = mimetypes.guess_extension(mime) or ".jpg"
+    if ext == ".jpe": ext = ".jpg"
+    fname    = f"staff_{uuid.uuid4().hex}{ext}"
+    fpath    = os.path.join(LINE_CONTENT_DIR, fname)
+    os.makedirs(LINE_CONTENT_DIR, exist_ok=True)
+    with open(fpath, "wb") as f:
+        f.write(data)
+
+    image_url = f"{PUBLIC_BASE_URL}/content/pub/{fname}"
+
+    staff_id   = int(staff.get("staff_id"))
+    staff_name = (staff.get("name") or "客服").strip()
+
+    async with get_conn() as conn:
+        ticket = await _get_ticket(conn, ticket_id)
+        if not ticket:
+            raise HTTPException(status_code=404, detail="ticket not found")
+
+        channel_id = (ticket.get("channel_id") or "").strip()
+        if not channel_id:
+            raise HTTPException(status_code=400, detail="ticket has no channel_id")
+
+        code, body_text, payload = await line_push_image(channel_id, image_url, image_url)
+
+        event_id = f"admin_img_{ticket_id}_{uuid.uuid4().hex[:12]}"
+        conv_id  = int(ticket["conversation_id"])
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO messages_raw
+                  (event_id, conversation_id, ticket_id, line_message_id,
+                   direction, message_type, text, raw_json,
+                   content_path, content_mime, content_size, content_name, content_url,
+                   sender_type, sender_name, staff_id, created_at)
+                VALUES (%s,%s,%s,NULL,'out','image',NULL,%s,%s,%s,%s,%s,%s,'staff',%s,%s,NOW())
+                """,
+                (
+                    event_id, conv_id, ticket_id,
+                    json.dumps({"line_push_status": code, "payload": payload}, ensure_ascii=False),
+                    fpath, mime, len(data), fname, image_url,
+                    staff_name, staff_id,
+                ),
+            )
+        await _touch_after_reply(conn, ticket_id)
+        await conn.commit()
+
+    result: dict = {"ok": True, "line_status": code, "url": image_url}
+    if code != 200:
+        result["line_warning"] = f"圖片已儲存，但 LINE 推播失敗（{code}）"
+    return result
+
+
+# 公開圖片路由（供 LINE 伺服器下載，不需 auth）
+@router.get("/content/pub/{filename}")
+async def get_public_content(filename: str):
+    # 防止路徑穿越
+    safe = os.path.basename(filename)
+    if not safe or safe != filename:
+        raise HTTPException(status_code=400, detail="invalid filename")
+    fpath = os.path.join(LINE_CONTENT_DIR, safe)
+    if not os.path.isfile(fpath):
+        raise HTTPException(status_code=404, detail="not found")
+    mime = mimetypes.guess_type(fpath)[0] or "application/octet-stream"
+    return FileResponse(fpath, media_type=mime)
+
+
 # 關閉指定 ticket，並釋放目前的指派客服
 @router.post("/tickets/{ticket_id}/close")
 async def close_ticket(ticket_id: int, body: CloseBody, staff: dict = Depends(get_current_staff)):
@@ -525,7 +642,7 @@ async def auth_login(body: PasswordLoginBody):
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, name, role, password_hash, is_active
+                SELECT id, name, role, permissions, password_hash, is_active
                 FROM staff
                 WHERE username=%s
                 LIMIT 1
@@ -555,11 +672,22 @@ async def auth_login(body: PasswordLoginBody):
             )
         await conn.commit()
 
+    raw_perms = row.get("permissions")
+    if isinstance(raw_perms, str):
+        try:
+            raw_perms = json.loads(raw_perms)
+        except Exception:
+            raw_perms = None
+    # staff 帳號若從未設定過權限（NULL），回傳空物件代表「全無權限」
+    if row["role"] != "admin" and raw_perms is None:
+        raw_perms = {}
+
     return {
-        "ok":   True,
-        "token": raw,
-        "name": row["name"],
-        "role": row["role"],
+        "ok":          True,
+        "token":       raw,
+        "name":        row["name"],
+        "role":        row["role"],
+        "permissions": raw_perms,
     }
 
 
@@ -591,9 +719,16 @@ async def staff_list(staff: dict = Depends(get_current_staff)):
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, name, username, role, is_active, created_at FROM staff ORDER BY id ASC"
+                "SELECT id, name, username, email, role, permissions, is_active, created_at FROM staff ORDER BY id ASC"
             )
             rows = await cur.fetchall()
+    # permissions 欄位可能是 JSON 字串，需解析成 dict
+    for r in rows:
+        if isinstance(r.get("permissions"), str):
+            try:
+                r["permissions"] = json.loads(r["permissions"])
+            except Exception:
+                r["permissions"] = None
     return {"ok": True, "items": rows}
 
 
@@ -605,6 +740,8 @@ async def staff_create(body: StaffCreateBody, staff: dict = Depends(get_current_
     username = (body.username or "").strip()
     password = (body.password or "").strip()
     role     = body.role if body.role in ("admin", "staff") else "staff"
+    email    = (body.email or "").strip() or None
+    perms    = json.dumps(body.permissions, ensure_ascii=False) if body.permissions is not None else None
     if not name or not username or not password:
         raise HTTPException(status_code=400, detail="name / username / password 不可空白")
 
@@ -615,8 +752,8 @@ async def staff_create(body: StaffCreateBody, staff: dict = Depends(get_current_
         async with conn.cursor() as cur:
             try:
                 await cur.execute(
-                    "INSERT INTO staff (name, username, password_hash, role, is_active) VALUES (%s, %s, %s, %s, 1)",
-                    (name, username, pw_hash, role),
+                    "INSERT INTO staff (name, username, password_hash, role, email, permissions, is_active) VALUES (%s, %s, %s, %s, %s, %s, 1)",
+                    (name, username, pw_hash, role, email, perms),
                 )
                 new_id = cur.lastrowid
             except Exception as e:
@@ -640,6 +777,10 @@ async def staff_update(staff_id: int, body: StaffUpdateBody, staff: dict = Depen
         fields.append("role=%s");       values.append(body.role)
     if body.is_active is not None:
         fields.append("is_active=%s");  values.append(int(body.is_active))
+    if body.email is not None:
+        fields.append("email=%s");      values.append((body.email.strip() or None))
+    if body.permissions is not None:
+        fields.append("permissions=%s"); values.append(json.dumps(body.permissions, ensure_ascii=False))
     if not fields:
         raise HTTPException(status_code=400, detail="沒有要更新的欄位")
     values.append(staff_id)
@@ -841,6 +982,27 @@ async def get_emoji(product_id: str, emoji_id: str, staff: dict = Depends(get_cu
                             headers={"Cache-Control": "public, max-age=31536000, immutable"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fetch emoji failed: {e}")
+
+
+# ── Intake（AI 萃取資訊 + 意圖）─────────────────────────────
+
+# 取得指定 ticket 的 AI 萃取結果
+@router.get("/tickets/{ticket_id}/intake")
+async def get_ticket_intake(ticket_id: int, staff: dict = Depends(get_current_staff)):
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT ci.*
+                FROM   conversation_intakes ci
+                JOIN   tickets t ON t.id = %s
+                WHERE  ci.conversation_id = t.conversation_id
+                LIMIT  1
+                """,
+                (ticket_id,),
+            )
+            row = await cur.fetchone()
+    return {"ok": True, "intake": row}
 
 
 # ── Customer Notes ────────────────────────────────────────────

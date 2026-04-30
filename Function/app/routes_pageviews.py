@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS page_heartbeats (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
 
+_CREATE_PAGE_EVENTS_SQL = """
+CREATE TABLE IF NOT EXISTS page_events (
+    id          BIGINT       AUTO_INCREMENT PRIMARY KEY,
+    pv_id       BIGINT,
+    session_id  VARCHAR(64)  NOT NULL DEFAULT '',
+    event_type  VARCHAR(50)  NOT NULL,
+    label       VARCHAR(200),
+    page        VARCHAR(200),
+    created_at  DATETIME     NOT NULL,
+    INDEX idx_pe_session    (session_id),
+    INDEX idx_pe_event_type (event_type),
+    INDEX idx_pe_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+"""
+
 # 為舊版資料表補欄位（欄位已存在時靜默忽略）
 _MIGRATIONS = [
     "ALTER TABLE page_views ADD COLUMN session_id   VARCHAR(64)  NOT NULL DEFAULT ''",
@@ -76,6 +91,7 @@ async def _ensure_tables():
         async with conn.cursor() as cur:
             await cur.execute(_CREATE_PAGE_VIEWS_SQL)
             await cur.execute(_CREATE_HEARTBEATS_SQL)
+            await cur.execute(_CREATE_PAGE_EVENTS_SQL)
             for sql in _MIGRATIONS:
                 try:
                     await cur.execute(sql)
@@ -113,6 +129,28 @@ class HeartbeatIn(BaseModel):
     page:       str
 
 
+class EventIn(BaseModel):
+    pv_id:      Optional[int] = None
+    session_id: Optional[str] = None
+    type:       str                    # e.g. 'cta_signup', 'nav_signup', 'outbound_line'
+    label:      Optional[str] = None   # 觸發來源頁路徑
+    page:       Optional[str] = None   # 同 label，前端兩者都送
+
+
+# ── 真實 IP 提取（Cloudflare Tunnel → nginx → FastAPI）────────
+def _get_real_ip(request: Request) -> str | None:
+    # Cloudflare Tunnel 帶 CF-Connecting-IP（訪客真實 IP）
+    cf = request.headers.get("cf-connecting-ip")
+    if cf:
+        return cf.strip()
+    # nginx proxy_set_header X-Forwarded-For 最左邊是訪客 IP
+    xfwd = request.headers.get("x-forwarded-for")
+    if xfwd:
+        return xfwd.split(",")[0].strip()
+    # 最後 fallback
+    return request.client.host if request.client else None
+
+
 # ── POST /api/pv ─────────────────────────────────────────────
 @public_router.post("/pv")
 async def record_page_view(body: PageViewIn, request: Request):
@@ -122,7 +160,7 @@ async def record_page_view(body: PageViewIn, request: Request):
     referrer    = (body.ref        or "").strip()[:500] or None
     session_id  = (body.session_id or "").strip()[:64]  or ""
     ua          = (body.ua or request.headers.get("user-agent", ""))[:500]
-    ip_addr     = request.client.host if request.client else None
+    ip_addr     = _get_real_ip(request)
     device_type = _detect_device(ua)
 
     async with get_conn() as conn:
@@ -139,6 +177,34 @@ async def record_page_view(body: PageViewIn, request: Request):
         await conn.commit()
 
     return {"ok": True, "pv_id": pv_id}
+
+
+# ── POST /api/pv/event ──────────────────────────────────────
+@public_router.post("/pv/event")
+async def record_event(body: EventIn):
+    await _ensure_tables()
+
+    event_type = (body.type  or "").strip()[:50]
+    label      = (body.label or body.page or "").strip()[:200] or None
+    page       = (body.page  or "").strip()[:200] or None
+    session_id = (body.session_id or "").strip()[:64] or ""
+
+    if not event_type:
+        return {"ok": False, "error": "type required"}
+
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO page_events
+                  (pv_id, session_id, event_type, label, page, created_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                """,
+                (body.pv_id, session_id, event_type, label, page),
+            )
+        await conn.commit()
+
+    return {"ok": True}
 
 
 # ── POST /api/pv/leave ───────────────────────────────────────
@@ -266,7 +332,7 @@ async def stats_referrers(
                     COUNT(*) AS views
                 FROM page_views
                 WHERE visited_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
-                GROUP BY referrer
+                GROUP BY page_views.referrer
                 ORDER BY views DESC
                 LIMIT %s
             """, (days, limit))
@@ -290,7 +356,7 @@ async def stats_devices(
                     COUNT(*) AS views
                 FROM page_views
                 WHERE visited_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
-                GROUP BY device_type
+                GROUP BY page_views.device_type
                 ORDER BY views DESC
             """, (days,))
             rows = await cur.fetchall()
@@ -359,3 +425,82 @@ async def stats_online(staff: dict = Depends(get_current_staff)):
             pages = await cur.fetchall()
 
     return {"ok": True, "online": online, "pages": pages}
+
+
+# ── GET /admin/api/stats/pageviews/events ────────────────────
+# CTA 點擊排行：各事件類型 × 來源頁面的點擊次數
+@admin_router.get("/stats/pageviews/events")
+async def stats_events(
+    days:       int = Query(7,   ge=1, le=365),
+    event_type: str = Query("",  description="篩選特定 type，空白=全部"),
+    limit:      int = Query(100, ge=1, le=500),
+    staff: dict = Depends(get_current_staff),
+):
+    await _ensure_tables()
+
+    type_filter = f"AND event_type = %s" if event_type else ""
+    params = [days]
+    if event_type:
+        params.append(event_type)
+    params.append(limit)
+
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(f"""
+                SELECT
+                    event_type,
+                    COALESCE(NULLIF(label, ''), '（未知頁面）') AS label,
+                    COUNT(*)                                     AS clicks,
+                    COUNT(DISTINCT session_id)                   AS sessions
+                FROM page_events
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                  {type_filter}
+                GROUP BY event_type, label
+                ORDER BY clicks DESC
+                LIMIT %s
+            """, params)
+            rows = await cur.fetchall()
+
+    return {"ok": True, "days": days, "items": rows}
+
+
+# ── GET /admin/api/stats/pageviews/funnel ────────────────────
+# 漏斗轉換率：各課程頁 → 立即報名 的轉換率
+# 計算方式：
+#   - 分母：該頁面的不重複 session 瀏覽數（page_views）
+#   - 分子：從該頁面按下 cta_signup 的不重複 session 數（page_events）
+@admin_router.get("/stats/pageviews/funnel")
+async def stats_funnel(
+    days:  int = Query(30, ge=1, le=365),
+    limit: int = Query(50, ge=1, le=200),
+    staff: dict = Depends(get_current_staff),
+):
+    await _ensure_tables()
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("""
+                SELECT
+                    pv.page_path                                       AS page,
+                    COUNT(DISTINCT pv.session_id)                      AS visitors,
+                    COUNT(DISTINCT pe.session_id)                      AS signups,
+                    ROUND(
+                        100.0 * COUNT(DISTINCT pe.session_id)
+                        / NULLIF(COUNT(DISTINCT pv.session_id), 0)
+                    )                                                  AS conversion_pct
+                FROM page_views pv
+                LEFT JOIN page_events pe
+                    ON  pe.session_id  = pv.session_id
+                    AND pe.event_type  = 'cta_signup'
+                    AND pe.label       = pv.page_path
+                    AND pe.created_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                WHERE pv.visited_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                  AND pv.session_id != ''
+                  AND pv.page_path NOT IN ('/', '#/')
+                GROUP BY pv.page_path
+                HAVING visitors >= 5
+                ORDER BY signups DESC, conversion_pct DESC
+                LIMIT %s
+            """, (days, days, limit))
+            rows = await cur.fetchall()
+
+    return {"ok": True, "days": days, "items": rows}

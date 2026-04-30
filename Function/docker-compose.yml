@@ -38,9 +38,17 @@ services:
       ATM_ACCOUNT_NAME: "愛潛水股份有限公司"
       ATM_ACCOUNT: "285-54009941-9"
 
+      # === 圖片傳送（LINE 需要可公開存取的 URL）===
+      PUBLIC_BASE_URL: "https://api.idiving.com.tw/admin/api"   # 例：https://your-domain.com/admin/api
+
+      # === Google AI 萃取 ===
+      GOOGLE_API_KEY: "AIzaSyD95S0gtYAxNjx2Q9IuSINCOSO3nl4GxPo" #"AIzaSyADGa5BDc_oYtAIOymUyDIMXazMhYQMTfsA" # 填入 Google AI Studio API Key
+      GEMINI_MODEL: "gemini-2.5-flash" #"gemini-2.5-flash" #"gemma-3-27b-it"   # 可換成 gemini-2.0-flash 等
+
       # === 內部 Notify（課程更新推播）===
       # LINE_TO_ID：要接收通知的 userId / groupId / roomId
-      LINE_NOTIFY_TO_ID: "Ua79fedbceaee4227c31a684d06e2aeef"
+      LINE_NOTIFY_TO_ID: "Ua79fedbceaee4227c31a684d06e2aeef" # hsiehieon
+      # "U83e89259965ddf51f9a6bb9e81cd399d" # iDiving小幫手(請勿加好友)
       # NOTIFY_TOKEN：和 checker.py 共用的內部驗證 token
       NOTIFY_TOKEN: "RsSkNneLP0opeVEoX_nL7fqsFXi42PlMuk3dXcfmtEs"
 

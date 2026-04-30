@@ -17,6 +17,7 @@ from fastapi.responses import PlainTextResponse
 from app.db import get_conn
 from app.session_manager import on_customer_message
 from app.quick_reply_handler import match_rule, build_quick_reply_message
+from app.intake_extractor import run_intake_extraction
 
 LINE_CHANNEL_SECRET       = os.environ.get("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
@@ -634,7 +635,17 @@ async def _handle_event(event: dict):
                         # commit 先寫入，再推送 Quick Reply
                         await conn.commit()
                         await _send_quick_reply(channel_id, rule)
+                        # ── AI 被動萃取（背景，不阻塞 webhook）──
+                        asyncio.create_task(
+                            run_intake_extraction(conversation_id, ticket_id)
+                        )
                         return          # 已 commit，直接返回
+
+                # ── AI 被動萃取（僅限客人文字訊息）──────────
+                if msg_text and (event.get("message") or {}).get("type") == "text":
+                    asyncio.create_task(
+                        run_intake_extraction(conversation_id, ticket_id)
+                    )
 
             elif event.get("type") == "follow":
                 await _insert_system_message(conn, conversation_id, ticket_id, "📲 客人重新加入 LINE@")

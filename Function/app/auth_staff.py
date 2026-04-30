@@ -1,4 +1,5 @@
 # app/auth_staff.py  ── idiving5d-OctoFlow v260310
+import json
 import os
 from fastapi import Header, HTTPException
 
@@ -27,7 +28,9 @@ async def _load_staff_by_token(raw_token: str):
         st.id AS token_id,
         st.staff_id,
         s.name,
+        s.email,
         s.role,
+        s.permissions,
         s.line_user_id,
         s.picture_url,
         s.is_active
@@ -45,6 +48,12 @@ async def _load_staff_by_token(raw_token: str):
             row = await cur.fetchone()
         if row:
             await _touch_token_last_used(conn, int(row["token_id"]))
+            # permissions 欄位可能是 JSON 字串，解析成 dict
+            if isinstance(row.get("permissions"), str):
+                try:
+                    row["permissions"] = json.loads(row["permissions"])
+                except Exception:
+                    row["permissions"] = None
         return row
 
 
