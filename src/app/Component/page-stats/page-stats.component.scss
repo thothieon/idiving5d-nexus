@@ -543,6 +543,141 @@
   border: 1px solid #1a2540;
 }
 
+// ── CTA 點擊 tab ─────────────────────────────────────────────
+
+.event-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+
+  button {
+    padding: 5px 12px;
+    border: 1px solid #334155;
+    border-radius: 20px;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    &:hover { color: #e5e7eb; border-color: #475569; }
+    &.active {
+      background: rgba(59,130,246,.15);
+      border-color: #3b82f6;
+      color: #93c5fd;
+      font-weight: 700;
+    }
+  }
+}
+
+.col-type {
+  min-width: 84px;
+  flex-shrink: 0;
+}
+
+.event-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #1e293b;
+  color: #94a3b8;
+
+  &.badge-signup { background: rgba(59,130,246,.2);  color: #93c5fd; }
+  &.badge-nav    { background: rgba(139,92,246,.2);  color: #c4b5fd; }
+  &.badge-line   { background: rgba(34,197,94,.2);   color: #86efac; }
+  &.badge-fb     { background: rgba(59,100,246,.2);  color: #a5b4fc; }
+  &.badge-ig     { background: rgba(236,72,153,.2);  color: #f9a8d4; }
+}
+
+.bar-event { background: #f59e0b; }
+
+// ── 漏斗轉換 tab ─────────────────────────────────────────────
+
+.funnel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.funnel-item {
+  background: #0b1220;
+  border: 1px solid #1a2540;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.funnel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.funnel-rank {
+  min-width: 24px;
+  text-align: right;
+  font-size: 12px;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.funnel-page {
+  flex: 1;
+  font-size: 14px;
+  color: #e5e7eb;
+  word-break: break-all;
+}
+
+.funnel-pct {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  flex-shrink: 0;
+
+  &.pct-mid  { color: #fcd34d; }
+  &.pct-high { color: #4ade80; }
+}
+
+.funnel-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  &:last-child { margin-bottom: 0; }
+}
+
+.funnel-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: #1e293b;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.funnel-bar {
+  height: 100%;
+  border-radius: 4px;
+  min-width: 2px;
+  transition: width .4s ease;
+
+  &.funnel-bar-visit  { background: #3b82f6; }
+  &.funnel-bar-signup { background: #22c55e; }
+}
+
+.funnel-stat {
+  min-width: 72px;
+  text-align: right;
+  font-size: 12px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+
+  &.signup-stat { color: #4ade80; }
+}
+
 // ── RWD ──────────────────────────────────────────────────────
 
 @media (max-width: 600px) {

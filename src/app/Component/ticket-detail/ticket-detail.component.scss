@@ -956,3 +956,201 @@
     &:focus { border-color: $accent; }
   }
 }
+
+// ── 附圖按鈕 ───────────────────────────────────────────────
+.attach-btn {
+  width:         36px;
+  height:        36px;
+  flex-shrink:   0;
+  border-radius: 50%;
+  border:        none;
+  background:    rgba(255, 255, 255, 0.08);
+  color:         rgba(255, 255, 255, 0.55);
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  cursor:        pointer;
+  transition:    background 0.15s, color 0.15s;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+    color:      rgba(255, 255, 255, 0.87);
+  }
+  &:disabled { opacity: 0.35; cursor: not-allowed; }
+}
+
+// ── 圖片預覽列 ─────────────────────────────────────────────
+.image-preview-bar {
+  display:     flex;
+  align-items: flex-end;
+  gap:         8px;
+  padding:     8px 12px 0;
+
+  .image-preview-wrap {
+    position:      relative;
+    display:       inline-block;
+
+    img {
+      max-height:    120px;
+      max-width:     200px;
+      border-radius: 10px;
+      border:        1px solid rgba(255,255,255,0.15);
+      display:       block;
+    }
+
+    .image-preview-clear {
+      position:         absolute;
+      top:              -8px;
+      right:            -8px;
+      width:            22px;
+      height:           22px;
+      border-radius:    50%;
+      background:       rgba(0,0,0,0.7);
+      border:           1px solid rgba(255,255,255,0.3);
+      color:            #fff;
+      font-size:        11px;
+      line-height:      1;
+      cursor:           pointer;
+      display:          flex;
+      align-items:      center;
+      justify-content:  center;
+    }
+  }
+}
+
+// ── 意圖 / 資訊萃取 Tab ────────────────────────────────────
+.intent-card {
+  border:        1px solid;
+  border-radius: 10px;
+  padding:       12px 14px;
+  margin-bottom: 12px;
+
+  .intent-label {
+    font-size:   16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .intent-confidence {
+    display:     flex;
+    align-items: center;
+    gap:         8px;
+    font-size:   12px;
+    color:       rgba(255,255,255,0.55);
+  }
+}
+
+.intake-completeness {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  font-size:   12px;
+  color:       rgba(255,255,255,0.55);
+  margin-bottom: 12px;
+
+  .info-label { white-space: nowrap; }
+}
+
+.confidence-bar {
+  flex:          1;
+  height:        6px;
+  border-radius: 3px;
+  background:    rgba(255,255,255,0.1);
+  overflow:      hidden;
+
+  .confidence-fill {
+    height:        100%;
+    border-radius: 3px;
+    transition:    width 0.4s ease;
+  }
+}
+
+.intake-fields {
+  display:        flex;
+  flex-direction: column;
+  gap:            8px;
+}
+
+.intake-row {
+  display:   flex;
+  gap:       8px;
+  font-size: 13px;
+
+  .intake-key {
+    color:      rgba(255,255,255,0.45);
+    min-width:  64px;
+    flex-shrink: 0;
+  }
+
+  .intake-val {
+    color:     rgba(255,255,255,0.87);
+    word-break: break-all;
+  }
+}
+
+.intake-updated {
+  margin-top: 14px;
+  font-size:  11px;
+  color:      rgba(255,255,255,0.3);
+  text-align: right;
+}
+
+// ── 資訊缺漏提醒 ──────────────────────────────────────────────
+
+.missing-fields-warn {
+  display:       flex;
+  align-items:   flex-start;
+  gap:           8px;
+  background:    rgba(255, 167, 38, 0.12);
+  border:        1px solid rgba(255, 167, 38, 0.35);
+  border-radius: 8px;
+  padding:       10px 12px;
+  font-size:     13px;
+  color:         #FFA726;
+  margin-top:    12px;
+
+  .missing-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  strong        { color: #FFD54F; }
+}
+
+// ── AI 建議回覆 ───────────────────────────────────────────────
+
+.suggested-reply-card {
+  margin-top:    12px;
+  background:    rgba(66, 165, 245, 0.08);
+  border:        1px solid rgba(66, 165, 245, 0.25);
+  border-radius: 8px;
+  padding:       12px;
+  display:       flex;
+  flex-direction: column;
+  gap:           8px;
+}
+
+.suggested-reply-label {
+  font-size:   11px;
+  font-weight: 600;
+  color:       #42A5F5;
+  letter-spacing: 0.4px;
+}
+
+.suggested-reply-text {
+  font-size:   13px;
+  color:       rgba(255,255,255,0.82);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break:  break-word;
+}
+
+.suggested-reply-btn {
+  align-self:    flex-start;
+  background:    #1565C0;
+  color:         #fff;
+  border:        none;
+  border-radius: 6px;
+  padding:       6px 14px;
+  font-size:     12px;
+  cursor:        pointer;
+  transition:    background 0.15s;
+
+  &:hover { background: #0D47A1; }
+}

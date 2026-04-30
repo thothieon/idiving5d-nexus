@@ -36,7 +36,7 @@ export class AdminLoginComponent {
     this.api.login(u, p).subscribe({
       next: (res) => {
         this.loading = false;
-        this.tokenSvc.set(res.token, res.role, res.name);
+        this.tokenSvc.set(res.token, res.role, res.name, res.permissions ?? null);
         this.router.navigateByUrl('/admin/turn');
       },
       error: (err) => {

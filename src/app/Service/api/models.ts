@@ -3,13 +3,24 @@
 // ── 舊有（保留相容）─────────────────────────────────────────
 export type TicketStatus = 'open' | 'pending' | 'closed';
 
+export interface StaffPermissions {
+  can_registration?: boolean;
+  can_courses?:      boolean;
+  can_pagestats?:    boolean;
+  can_linestats?:    boolean;
+  can_questions?:    boolean;
+  can_quickreply?:   boolean;
+}
+
 export interface StaffItem {
-  id:         number;
-  name:       string;
-  username:   string | null;
-  role:       'admin' | 'staff';
-  is_active:  number;
-  created_at: string;
+  id:          number;
+  name:        string;
+  username:    string | null;
+  email:       string | null;
+  role:        'admin' | 'staff';
+  permissions: StaffPermissions | null;
+  is_active:   number;
+  created_at:  string;
 }
 
 export interface Dashboard {
@@ -206,4 +217,113 @@ export interface CustomerNote {
   note:        string;
   created_at:  string;
   updated_at:  string;
+}
+
+// ── 報名系統 ─────────────────────────────────────────────────
+export interface RegCourse {
+  id:           number;
+  course_code:  string;
+  title:        string;
+  type:         'course' | 'activity';
+  require_form: number;
+  is_active:    number;
+}
+
+export interface RegCourseForm {
+  course_code:  string;
+  title:        string;
+  type:         string;
+  description:  string;
+  require_form: number;
+  is_active:    number;
+  sort_order:   number;
+}
+
+export interface RegSession {
+  id:                number;
+  course_id:         number;
+  course_title:      string;
+  label:             string;
+  start_date:        string;
+  end_date:          string;
+  capacity:          number;
+  waitlist_capacity: number;
+  status:            'open' | 'closed';
+  note:              string | null;
+  confirmed_count:   number;
+  waitlist_count:    number;
+}
+
+export interface RegSessionForm {
+  course_id:         number;
+  label:             string;
+  start_date:        string;
+  end_date:          string;
+  capacity:          number;
+  waitlist_capacity: number;
+  status:            string;
+  note:              string;
+}
+
+export interface RegRegistration {
+  id:                 number;
+  course_title:       string;
+  course_code:        string;
+  session_label:      string;
+  start_date:         string;
+  end_date:           string;
+  // 客戶基本
+  customer_id:        number;
+  name:               string;
+  id_number:          string;
+  phone:              string;        // 行動電話
+  home_phone:         string | null; // 住家電話
+  email:              string | null;
+  mid:                string | null;
+  nickname:           string | null; // 暱稱
+  name_en:            string | null; // 英文姓名
+  birth_date:         string | null; // 出生日期
+  nationality:        string | null; // 國籍
+  blood_type:         string | null; // 血型
+  // 地址與緊急
+  address:            string | null;
+  emergency_contact:  string | null;
+  emergency_phone:    string | null;
+  // 身體數值
+  height:             number | null;
+  weight:             number | null;
+  vision_left:        number | null;
+  vision_right:       number | null;
+  // 會員
+  payment_date:       string | null;
+  membership_expiry:  string | null;
+  // 報名狀態
+  reg_status:         'pending' | 'confirmed' | 'cancelled' | 'waitlist';
+  payment_status:     'unpaid' | 'paid';
+  waitlist_position:  number | null;
+  registered_at:      string;
+  confirmed_at:       string | null;
+  notes:              string | null;
+}
+
+export interface RegCustomerUpdate {
+  name?:               string;
+  phone?:              string;
+  home_phone?:         string | null;
+  email?:              string | null;
+  mid?:                string | null;
+  nickname?:           string | null;
+  name_en?:            string | null;
+  birth_date?:         string | null;
+  nationality?:        string | null;
+  blood_type?:         string | null;
+  address?:            string | null;
+  emergency_contact?:  string | null;
+  emergency_phone?:    string | null;
+  height?:             number | null;
+  weight?:             number | null;
+  vision_left?:        number | null;
+  vision_right?:       number | null;
+  payment_date?:       string | null;
+  membership_expiry?:  string | null;
 }

@@ -18,6 +18,12 @@
       </div>
     </div>
 
+    <button class="icon-btn" title="重新整理" (click)="refresh()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+    </button>
     <button class="icon-btn" (click)="showPanel = !showPanel">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
@@ -104,8 +110,37 @@
       <div #chatBottom></div>
     </div>
 
+    <!-- 圖片預覽列 -->
+    <div class="image-preview-bar" *ngIf="imagePreview">
+      <div class="image-preview-wrap">
+        <img [src]="imagePreview" alt="預覽" />
+        <button class="image-preview-clear" (click)="clearImage()" title="取消">✕</button>
+      </div>
+      <button class="send-btn ready" [class.sending]="sendingImage"
+              (click)="sendImage()" [disabled]="sendingImage">
+        <span *ngIf="sendingImage" class="send-spinner"></span>
+        <svg *ngIf="!sendingImage" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
+        </svg>
+      </button>
+    </div>
+
     <!-- 回覆框 -->
     <div class="reply-bar">
+      <!-- 隱藏 file input -->
+      <input #imageInput type="file" accept="image/*" style="display:none"
+             (change)="onImageSelect($event)" />
+
+      <!-- 附圖按鈕 -->
+      <button class="attach-btn" title="傳送圖片"
+              [disabled]="sending || sendingImage"
+              (click)="imageInput.click()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </button>
+
       <textarea class="reply-input" [(ngModel)]="draft"
                 placeholder="輸入回覆… (Enter 送出，Shift+Enter 換行)"
                 (keydown)="onEnter($event)"
@@ -134,6 +169,7 @@
     <div class="drawer-tabs">
       <button [class.active]="rightTab==='status'"  (click)="rightTab='status'">狀態</button>
       <button [class.active]="rightTab==='notes'"   (click)="rightTab='notes'">筆記</button>
+      <button [class.active]="rightTab==='intake'"  (click)="openIntakeTab()">🤖 資訊</button>
       <button [class.active]="rightTab==='history'" (click)="rightTab='history'">歷史</button>
       <button [class.active]="rightTab==='payment'" (click)="openPaymentTab()">💰 繳費</button>
     </div>
@@ -338,6 +374,101 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ── 資訊萃取 Tab ── -->
+    <div class="drawer-body intake-body" *ngIf="rightTab==='intake'">
+
+      <div class="empty-hint" *ngIf="intakeLoading">AI 分析中…</div>
+      <div class="empty-hint" *ngIf="!intakeLoading && !intake">尚無萃取資料，等客人發訊息後自動分析</div>
+
+      <ng-container *ngIf="!intakeLoading && intake">
+
+        <!-- 意圖卡片 -->
+        <div class="intent-card" [style.border-color]="getIntentColor(intake.intent)">
+          <div class="intent-label" [style.color]="getIntentColor(intake.intent)">
+            {{ getIntentLabel(intake.intent) }}
+          </div>
+          <div class="intent-confidence">
+            <div class="confidence-bar">
+              <div class="confidence-fill"
+                   [style.width.%]="intake.intent_confidence ?? 0"
+                   [style.background]="getIntentColor(intake.intent)">
+              </div>
+            </div>
+            <span>{{ intake.intent_confidence ?? 0 }}%</span>
+          </div>
+        </div>
+
+        <!-- 完整度 -->
+        <div class="intake-completeness">
+          <span class="info-label">資料完整度</span>
+          <div class="confidence-bar">
+            <div class="confidence-fill"
+                 [style.width.%]="intake.completeness"
+                 [style.background]="intake.completeness >= 80 ? '#66BB6A' : intake.completeness >= 40 ? '#FFA726' : '#EF5350'">
+            </div>
+          </div>
+          <span>{{ intake.completeness }}%</span>
+        </div>
+
+        <hr class="divider" />
+
+        <!-- 萃取欄位 -->
+        <div class="intake-fields">
+          <div class="intake-row" *ngIf="intake.customer_name">
+            <span class="intake-key">姓名</span>
+            <span class="intake-val">{{ intake.customer_name }}</span>
+          </div>
+          <div class="intake-row" *ngIf="intake.phone">
+            <span class="intake-key">電話</span>
+            <span class="intake-val">{{ intake.phone }}</span>
+          </div>
+          <div class="intake-row" *ngIf="intake.course_type">
+            <span class="intake-key">課程</span>
+            <span class="intake-val">{{ intake.course_type }}</span>
+          </div>
+          <div class="intake-row" *ngIf="intake.preferred_date">
+            <span class="intake-key">希望日期</span>
+            <span class="intake-val">{{ intake.preferred_date }}</span>
+          </div>
+          <div class="intake-row" *ngIf="intake.group_size">
+            <span class="intake-key">人數</span>
+            <span class="intake-val">{{ intake.group_size }} 人</span>
+          </div>
+          <div class="intake-row" *ngIf="intake.experience_level">
+            <span class="intake-key">經驗</span>
+            <span class="intake-val">{{ intake.experience_level }}</span>
+          </div>
+          <div class="intake-row" *ngIf="intake.notes">
+            <span class="intake-key">備註</span>
+            <span class="intake-val">{{ intake.notes }}</span>
+          </div>
+        </div>
+
+        <!-- 資訊缺漏提醒 -->
+        <div class="missing-fields-warn" *ngIf="missingFields.length">
+          <span class="missing-icon">⚠</span>
+          <span>
+            {{ intake.intent === 'booking' ? '報名' : '詢問' }}意圖，尚缺：
+            <strong>{{ missingFields.join('、') }}</strong>
+          </span>
+        </div>
+
+        <hr class="divider" />
+
+        <!-- AI 建議回覆 -->
+        <div class="suggested-reply-card" *ngIf="intake.suggested_reply">
+          <div class="suggested-reply-label">🤖 建議回覆</div>
+          <div class="suggested-reply-text">{{ intake.suggested_reply }}</div>
+          <button class="suggested-reply-btn" (click)="useSuggestedReply()">
+            套用到輸入框
+          </button>
+        </div>
+
+        <div class="intake-updated">最後更新：{{ formatDate(intake.updated_at) }}</div>
+
+      </ng-container>
     </div>
 
     <!-- ── 歷史 Tab ── -->

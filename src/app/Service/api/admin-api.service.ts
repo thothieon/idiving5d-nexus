@@ -9,8 +9,9 @@ import {
   TicketStatusResponse, SessionHistory,
   Booking, BookingForm, CustomerNote,
   QuickReplyRule, QuickReplyButton,
-  StaffItem, Tag,
+  StaffItem, StaffPermissions, Tag,
   CourseSchedule, CourseScheduleForm,
+  RegCourse, RegCourseForm, RegSession, RegSessionForm, RegRegistration, RegCustomerUpdate,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -22,7 +23,7 @@ export class AdminApiService {
   // ── 認證 ──────────────────────────────────────────────────
 
   login(username: string, password: string) {
-    return this.http.post<{ ok: boolean; token: string; name: string; role: string }>(
+    return this.http.post<{ ok: boolean; token: string; name: string; role: string; permissions: StaffPermissions | null }>(
       `${this.base}/auth/login`,
       { username, password },
     );
@@ -40,11 +41,11 @@ export class AdminApiService {
     ).pipe(map(r => r.items));
   }
 
-  staffCreate(body: { name: string; username: string; password: string; role: string }) {
+  staffCreate(body: { name: string; username: string; password: string; role: string; email?: string | null; permissions?: StaffPermissions | null }) {
     return this.http.post<{ ok: boolean; id: number }>(`${this.base}/staff`, body);
   }
 
-  staffUpdate(id: number, body: { name?: string; username?: string; role?: string; is_active?: number }) {
+  staffUpdate(id: number, body: { name?: string; username?: string; role?: string; is_active?: number; email?: string | null; permissions?: StaffPermissions | null }) {
     return this.http.patch<{ ok: boolean }>(`${this.base}/staff/${id}`, body);
   }
 
@@ -119,10 +120,23 @@ export class AdminApiService {
     return this.http.get<any>(`${this.base}/stats/pageviews/online`);
   }
 
+  statsPageViewsEvents(days: number, eventType = ''): Observable<any> {
+    let params = new HttpParams().set('days', String(days)).set('limit', '200');
+    if (eventType) params = params.set('event_type', eventType);
+    return this.http.get<any>(`${this.base}/stats/pageviews/events`, { params });
+  }
+
+  statsPageViewsFunnel(days: number): Observable<any> {
+    const params = new HttpParams().set('days', String(days)).set('limit', '100');
+    return this.http.get<any>(`${this.base}/stats/pageviews/funnel`, { params });
+  }
+
   // ── 系統 ──────────────────────────────────────────────────
 
   me() {
-    return this.http.get(`${this.base}/staff/me`);
+    return this.http.get<{ ok: boolean; staff: { role: string; name: string; permissions: StaffPermissions | null } }>(
+      `${this.base}/staff/me`
+    );
   }
 
   dashboard() {
@@ -169,6 +183,28 @@ export class AdminApiService {
 
   reply(ticketId: number, text: string) {
     return this.http.post(`${this.base}/tickets/${ticketId}/reply`, { text });
+  }
+
+  // ── LINE 客服統計 ─────────────────────────────────────────
+  lineOverview(days = 7):       Observable<any> { return this.http.get<any>(`${this.base}/stats/line/overview?days=${days}`); }
+  lineDaily(days = 30):         Observable<any> { return this.http.get<any>(`${this.base}/stats/line/daily?days=${days}`); }
+  linePeakHours(days = 30):     Observable<any> { return this.http.get<any>(`${this.base}/stats/line/peak_hours?days=${days}`); }
+  lineTickets(days = 30):       Observable<any> { return this.http.get<any>(`${this.base}/stats/line/tickets?days=${days}`); }
+  lineIntents(days = 30):       Observable<any> { return this.http.get<any>(`${this.base}/stats/line/intents?days=${days}`); }
+  lineMessageTypes(days = 30):  Observable<any> { return this.http.get<any>(`${this.base}/stats/line/message_types?days=${days}`); }
+  lineCourses(days = 30):       Observable<any> { return this.http.get<any>(`${this.base}/stats/line/courses?days=${days}`); }
+  lineSendDailyReport():        Observable<any> { return this.http.post<any>(`${this.base}/stats/line/daily_report`, {}); }
+
+  getTicketIntake(ticketId: number): Observable<any> {
+    return this.http.get<any>(`${this.base}/tickets/${ticketId}/intake`).pipe(
+      map(r => r?.intake ?? null)
+    );
+  }
+
+  replyImage(ticketId: number, file: File) {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http.post(`${this.base}/tickets/${ticketId}/reply_image`, form);
   }
 
   close(ticketId: number) {
@@ -300,5 +336,68 @@ export class AdminApiService {
 
   deleteCourseSchedule(id: number): Observable<any> {
     return this.http.delete<any>(`${this.base}/courses/schedules/${id}`);
+  }
+
+  // ── 報名系統 ──────────────────────────────────────────────
+
+  regListCourses(): Observable<RegCourse[]> {
+    return this.http.get<RegCourse[]>(`${this.base}/reg/courses`);
+  }
+
+  regCreateCourse(body: RegCourseForm): Observable<{ id: number }> {
+    return this.http.post<{ id: number }>(`${this.base}/reg/courses`, body);
+  }
+
+  regUpdateCourse(id: number, body: Partial<RegCourseForm>): Observable<any> {
+    return this.http.put<any>(`${this.base}/reg/courses/${id}`, body);
+  }
+
+  regListSessions(courseId?: number): Observable<RegSession[]> {
+    const url = courseId
+      ? `${this.base}/reg/sessions?course_id=${courseId}`
+      : `${this.base}/reg/sessions`;
+    return this.http.get<RegSession[]>(url);
+  }
+
+  regCreateSession(body: RegSessionForm): Observable<{ id: number }> {
+    return this.http.post<{ id: number }>(`${this.base}/reg/sessions`, body);
+  }
+
+  regUpdateSession(id: number, body: Partial<RegSessionForm>): Observable<any> {
+    return this.http.put<any>(`${this.base}/reg/sessions/${id}`, body);
+  }
+
+  regListRegistrations(params: {
+    session_id?: number;
+    course_id?: number;
+    reg_status?: string;
+  }): Observable<RegRegistration[]> {
+    let p = new HttpParams();
+    if (params.session_id) p = p.set('session_id', params.session_id);
+    if (params.course_id)  p = p.set('course_id',  params.course_id);
+    if (params.reg_status) p = p.set('reg_status',  params.reg_status);
+    return this.http.get<RegRegistration[]>(`${this.base}/reg/registrations`, { params: p });
+  }
+
+  regUpdateRegistration(id: number, body: {
+    reg_status?: string;
+    payment_status?: string;
+    notes?: string;
+  }): Observable<any> {
+    return this.http.put<any>(`${this.base}/reg/registrations/${id}`, body);
+  }
+
+  regUpdateCustomer(customerId: number, body: RegCustomerUpdate): Observable<any> {
+    return this.http.put<any>(`${this.base}/reg/customers/${customerId}`, body);
+  }
+
+  regExportUrl(params: { session_id?: number; course_id?: number; reg_status?: string }): string {
+    const q = new URLSearchParams();
+    if (params.session_id) q.set('session_id', String(params.session_id));
+    if (params.course_id)  q.set('course_id',  String(params.course_id));
+    if (params.reg_status) q.set('reg_status',  params.reg_status);
+    const token = localStorage.getItem('admin_token') ?? '';
+    q.set('x_admin_token', token);
+    return `${this.base}/reg/registrations/export?${q.toString()}`;
   }
 }

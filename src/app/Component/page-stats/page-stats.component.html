@@ -24,6 +24,8 @@
     <button [class.active]="tab==='daily'"     (click)="setTab('daily')">趨勢</button>
     <button [class.active]="tab==='referrers'" (click)="setTab('referrers')">來源</button>
     <button [class.active]="tab==='sessions'"  (click)="setTab('sessions')">行為路徑</button>
+    <button [class.active]="tab==='events'"    (click)="setTab('events')">CTA 點擊</button>
+    <button [class.active]="tab==='funnel'"    (click)="setTab('funnel')">漏斗轉換</button>
   </div>
 
   <div class="err" *ngIf="errorMsg">{{ errorMsg }}</div>
@@ -200,6 +202,91 @@
           <span class="session-time">{{ fmtDate(s.start_at) }}</span>
         </div>
         <div class="session-journey">{{ s.journey }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ CTA 點擊 tab ════════════════════════════════════════ -->
+  <div *ngIf="tab === 'events' && !loading">
+
+    <!-- 事件類型篩選 -->
+    <div class="event-filter">
+      <button *ngFor="let o of eventTypeOptions"
+              [class.active]="eventTypeFilter === o.value"
+              (click)="setEventTypeFilter(o.value)">
+        {{ o.label }}
+      </button>
+    </div>
+
+    <div class="empty" *ngIf="!events.length">近 {{ days }} 天沒有點擊事件資料</div>
+
+    <div class="table-head" *ngIf="events.length">
+      <span class="col-rank">#</span>
+      <span class="col-type">類型</span>
+      <span class="col-path">來源頁面</span>
+      <span class="col-num">點擊</span>
+      <span class="col-num">人數</span>
+    </div>
+
+    <div class="list" *ngIf="events.length">
+      <div class="item" *ngFor="let e of events; let i = index">
+        <span class="col-rank">{{ i+1 }}</span>
+        <span class="col-type">
+          <span class="event-badge" [ngClass]="eventTypeBadgeClass(e.event_type)">
+            {{ eventTypeLabel(e.event_type) }}
+          </span>
+        </span>
+        <div class="col-path">
+          <div class="path-text">{{ e.label }}</div>
+          <div class="bar-wrap">
+            <div class="bar bar-event" [style.width.%]="(e.clicks / maxEventClicks) * 100"></div>
+          </div>
+        </div>
+        <span class="col-num views">{{ e.clicks }}</span>
+        <span class="col-num uniq">{{ e.sessions }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 漏斗轉換 tab ═════════════════════════════════════════ -->
+  <div *ngIf="tab === 'funnel' && !loading">
+
+    <div class="summary" *ngIf="funnel.length">
+      各課程頁的「立即報名」轉換率（至少 5 位訪客）
+    </div>
+
+    <div class="empty" *ngIf="!funnel.length">
+      近 {{ days }} 天資料不足（需要有 cta_signup 事件且訪客 ≥ 5）
+    </div>
+
+    <div class="funnel-list" *ngIf="funnel.length">
+      <div class="funnel-item" *ngFor="let f of funnel; let i = index">
+        <div class="funnel-header">
+          <span class="funnel-rank">{{ i+1 }}</span>
+          <span class="funnel-page">{{ f.page }}</span>
+          <span class="funnel-pct" [class.pct-high]="(f.conversion_pct ?? 0) >= 10"
+                                   [class.pct-mid]="(f.conversion_pct ?? 0) >= 5 && (f.conversion_pct ?? 0) < 10">
+            {{ f.conversion_pct != null ? (f.conversion_pct + '%') : '—' }}
+          </span>
+        </div>
+        <div class="funnel-bar-row">
+          <!-- 瀏覽人數 -->
+          <div class="funnel-bar-wrap">
+            <div class="funnel-bar funnel-bar-visit"
+                 [style.width.%]="(f.visitors / maxFunnelVisitors) * 100">
+            </div>
+          </div>
+          <span class="funnel-stat">{{ f.visitors }} 人看</span>
+        </div>
+        <div class="funnel-bar-row">
+          <!-- 報名點擊數 -->
+          <div class="funnel-bar-wrap">
+            <div class="funnel-bar funnel-bar-signup"
+                 [style.width.%]="(f.visitors > 0 ? f.signups / f.visitors : 0) * 100">
+            </div>
+          </div>
+          <span class="funnel-stat signup-stat">{{ f.signups }} 人按報名</span>
+        </div>
       </div>
     </div>
   </div>

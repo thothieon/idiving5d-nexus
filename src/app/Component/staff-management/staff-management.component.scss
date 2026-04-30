@@ -103,6 +103,8 @@ tbody tr {
 }
 
 .mono { font-family: monospace; font-size: 13px; }
+.mono.small { font-size: 12px; color: #64748b; }
+.perm-summary { font-size: 12px; color: #94a3b8; max-width: 200px; }
 
 // ── Badges ────────────────────────────────────────────────
 
@@ -210,6 +212,38 @@ tbody tr {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 20px;
+}
+
+// ── 權限勾選 ──────────────────────────────────────────────
+
+.perm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #0a0f1c;
+}
+
+.perm-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #cbd5e1;
+  cursor: pointer;
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0;
+
+  input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    accent-color: #3b82f6;
+    cursor: pointer;
+  }
 }
 
 .btn-submit {

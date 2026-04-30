@@ -136,12 +136,32 @@ input {
 
 .err  { margin-top: 10px; color: #f87171; }
 
-h2 {
+h2, .section-hd {
   max-width: 760px;
   margin: 14px auto 8px;
   padding: 0 12px;
   font-size: 14px;
   color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swap-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #374151;
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: #1e293b;
+    color: #e5e7eb;
+  }
 }
 
 .mt { margin-top: 18px; }

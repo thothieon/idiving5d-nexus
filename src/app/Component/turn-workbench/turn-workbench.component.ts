@@ -30,6 +30,7 @@ export class TurnWorkbenchComponent implements OnInit {
   search = '';
   onlyOverdue   = false;
   filterTagId: number | null = null;
+  swapped = false;
 
   // ── 標籤管理 ─────────────────────────────────────────────
   allTags:       Tag[]   = [];

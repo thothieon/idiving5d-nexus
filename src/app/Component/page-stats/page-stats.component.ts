@@ -10,8 +10,10 @@ interface DailyItem    { date: string; views: number; uniques: number; }
 interface RefItem      { referrer: string; views: number; }
 interface DeviceItem   { device_type: string; views: number; }
 interface SessionItem  { session_id: string; page_count: number; start_at: string; duration_sec: number; journey: string; }
+interface EventItem    { event_type: string; label: string; clicks: number; sessions: number; }
+interface FunnelItem   { page: string; visitors: number; signups: number; conversion_pct: number|null; }
 
-type Tab = 'overview' | 'pages' | 'daily' | 'referrers' | 'sessions';
+type Tab = 'overview' | 'pages' | 'daily' | 'referrers' | 'sessions' | 'events' | 'funnel';
 
 @Component({
   standalone: true,
@@ -41,6 +43,19 @@ export class PageStatsComponent implements OnInit, OnDestroy {
   refs:    RefItem[]     = [];
   devices: DeviceItem[]  = [];
   sessions: SessionItem[] = [];
+  events:  EventItem[]   = [];
+  funnel:  FunnelItem[]  = [];
+
+  // ── 事件篩選 ────────────────────────────────────────────
+  eventTypeFilter = '';
+  readonly eventTypeOptions = [
+    { value: '',               label: '全部類型' },
+    { value: 'cta_signup',    label: '立即報名' },
+    { value: 'nav_signup',    label: '導覽列報名' },
+    { value: 'outbound_line', label: 'LINE 點擊' },
+    { value: 'outbound_fb',   label: 'Facebook' },
+    { value: 'outbound_ig',   label: 'Instagram' },
+  ];
 
   // ── 圖表尺寸常數 ─────────────────────────────────────────
   private readonly CW = 600;
@@ -80,7 +95,8 @@ export class PageStatsComponent implements OnInit, OnDestroy {
     this.loading  = true;
     this.errorMsg = '';
     let done = 0;
-    const check = () => { if (++done === 5) { this.loading = false; this.cdr.detectChanges(); } };
+    const total = 7;
+    const check = () => { if (++done === total) { this.loading = false; this.cdr.detectChanges(); } };
 
     this.api.statsPageViews(this.days).subscribe({
       next: r => { this.totalViews = r.total ?? 0; this.pages = r.items ?? []; check(); },
@@ -102,6 +118,39 @@ export class PageStatsComponent implements OnInit, OnDestroy {
       next: r => { this.sessions = r.items ?? []; check(); },
       error: () => check(),
     });
+    this.api.statsPageViewsEvents(this.days, this.eventTypeFilter).subscribe({
+      next: r => { this.events = r.items ?? []; check(); },
+      error: () => check(),
+    });
+    this.api.statsPageViewsFunnel(this.days).subscribe({
+      next: r => { this.funnel = r.items ?? []; check(); },
+      error: () => check(),
+    });
+  }
+
+  setEventTypeFilter(v: string) {
+    this.eventTypeFilter = v;
+    this.api.statsPageViewsEvents(this.days, v).subscribe({
+      next: r => { this.events = r.items ?? []; this.cdr.detectChanges(); },
+    });
+  }
+
+  // ── helpers ─────────────────────────────────────────────
+  get maxEventClicks(): number { return this.events[0]?.clicks ?? 1; }
+  get maxFunnelVisitors(): number { return this.funnel[0]?.visitors ?? 1; }
+
+  eventTypeLabel(type: string): string {
+    return this.eventTypeOptions.find(o => o.value === type)?.label ?? type;
+  }
+
+  eventTypeBadgeClass(type: string): string {
+    return {
+      cta_signup:    'badge-signup',
+      nav_signup:    'badge-nav',
+      outbound_line: 'badge-line',
+      outbound_fb:   'badge-fb',
+      outbound_ig:   'badge-ig',
+    }[type] ?? '';
   }
 
   loadOnline() {

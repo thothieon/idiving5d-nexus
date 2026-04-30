@@ -1,0 +1,376 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background: #070b12;
+  color: #e5e7eb;
+}
+
+// ── Topbar ─────────────────────────────────────────────────
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #0b0f1a;
+  border-bottom: 1px solid #1f2937;
+}
+
+.brand { font-weight: 900; letter-spacing: .3px; }
+
+// ── Buttons ────────────────────────────────────────────────
+
+.ghost {
+  background: transparent;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+
+  &:disabled { opacity: .4; cursor: default; }
+  &.sm      { padding: 5px 10px; font-size: 12px; }
+  &.back    { border-color: #334155; }
+  &.primary { border-color: #3b82f6; background: rgba(59,130,246,.2); color: #93c5fd; }
+  &.danger  { border-color: rgba(248,113,113,.5); color: #f87171; }
+}
+
+// ── Flash ──────────────────────────────────────────────────
+
+.flash {
+  max-width: 800px;
+  margin: 10px auto 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+
+  &.success { background: rgba(34,197,94,.15);   color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+  &.error   { background: rgba(248,113,113,.12); color: #fca5a5; border: 1px solid rgba(248,113,113,.3); }
+}
+
+// ── Page Tabs ──────────────────────────────────────────────
+
+.page-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #1f2937;
+  padding: 0 14px;
+  margin-top: 10px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+
+  &.active {
+    color: #93c5fd;
+    border-bottom-color: #3b82f6;
+  }
+}
+
+// ── Page Body ──────────────────────────────────────────────
+
+.page-body {
+  max-width: 800px;
+  margin: 14px auto;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hint       { color: #94a3b8; padding: 12px 0; }
+.empty-hint { color: #64748b; font-size: 13px; padding: 8px 0; }
+
+// ── Filter Bar ─────────────────────────────────────────────
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  select {
+    background: #0d1525;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: #e5e7eb;
+    padding: 8px 10px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    flex: 1;
+    min-width: 140px;
+
+    &:focus { border-color: #3b82f6; }
+    option  { background: #0d1525; }
+  }
+}
+
+// ── 報名名單 ────────────────────────────────────────────────
+
+.reg-list { display: flex; flex-direction: column; gap: 8px; }
+
+.reg-card {
+  background: #0b1220;
+  border: 1px solid #1f2a44;
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color .15s;
+
+  &:hover { border-color: #3b82f6; }
+}
+
+.reg-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.reg-name   { font-weight: 800; font-size: 15px; color: #f0f4ff; }
+.reg-course { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+
+.reg-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.reg-time { margin-left: auto; }
+
+// ── Badge ──────────────────────────────────────────────────
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 3px 9px;
+  white-space: nowrap;
+
+  &.s-pending   { background: rgba(251,191,36,.15);  color: #fcd34d; }
+  &.s-confirmed { background: rgba(34,197,94,.15);   color: #86efac; }
+  &.s-cancelled { background: rgba(100,116,139,.15); color: #94a3b8; }
+  &.s-waitlist  { background: rgba(251,146,60,.15);  color: #fdba74; }
+  &.s-open      { background: rgba(34,197,94,.15);   color: #86efac; }
+  &.s-closed    { background: rgba(100,116,139,.15); color: #94a3b8; }
+
+  &.pay      { background: rgba(100,116,139,.15); color: #94a3b8; }
+  &.pay.paid { background: rgba(34,197,94,.15);   color: #86efac; }
+}
+
+// ── 梯次管理 ────────────────────────────────────────────────
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #f0f4ff;
+}
+
+.session-list { display: flex; flex-direction: column; gap: 10px; }
+
+.session-card {
+  background: #0b1220;
+  border: 1px solid #1f2a44;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.session-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.session-label  { font-weight: 800; color: #f0f4ff; margin-right: 8px; }
+
+.course-code-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #93c5fd;
+  background: rgba(59,130,246,.15);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+.session-course { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+.session-date   { font-size: 13px; color: #93c5fd; margin-bottom: 4px; }
+.session-quota  { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+.session-note   { font-size: 12px; color: #475569; margin-bottom: 8px; }
+
+.session-actions { display: flex; gap: 6px; }
+
+// ── Overlay / Dialog ───────────────────────────────────────
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.dialog {
+  background: #0d1525;
+  border: 1px solid #1f2a44;
+  border-radius: 20px;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 90dvh;
+  overflow-y: auto;
+
+  &.wide { max-width: 500px; }
+}
+
+.dialog-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: #f0f4ff;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-error {
+  font-size: 13px;
+  color: #f87171;
+  padding: 8px 10px;
+  background: rgba(248,113,113,.1);
+  border-radius: 8px;
+}
+
+// ── Detail Grid ────────────────────────────────────────────
+
+.detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.detail-row {
+  display: flex;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid #1f2937;
+
+  &:last-child { border-bottom: none; }
+
+  span:first-child { color: #64748b; width: 72px; flex-shrink: 0; }
+  span:last-child  { color: #e5e7eb; font-weight: 500; }
+}
+
+// ── Action Group ───────────────────────────────────────────
+
+.action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+// ── Form ───────────────────────────────────────────────────
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label { font-size: 12px; font-weight: 700; color: #94a3b8; }
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  .form-group { flex: 1; }
+}
+
+input, select, textarea {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  color: #f0f4ff;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+
+  &::placeholder { color: #475569; }
+  &:focus { border-color: #3b82f6; }
+}
+
+select option { background: #111827; }
+
+.form-error {
+  font-size: 13px;
+  color: #f87171;
+  padding: 8px 10px;
+  background: rgba(248,113,113,.1);
+  border-radius: 8px;
+}
+
+// ── 客戶資料區塊 ─────────────────────────────────────────────
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #1f2937;
+  margin: 14px 0;
+}
+
+.customer-section {
+  margin-top: 4px;
+}
+
+.customer-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+// 兩欄 grid 編輯表單
+.edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+
+  .form-group { margin-bottom: 0; }
+  .form-group.full { grid-column: 1 / -1; }
+}

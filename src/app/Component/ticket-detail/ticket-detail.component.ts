@@ -51,7 +51,26 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
 
   // ── 右側抽屜 ────────────────────────────────────────────
   showPanel = false;
-  rightTab: 'status' | 'notes' | 'history' | 'payment' = 'status';
+  rightTab: 'status' | 'notes' | 'history' | 'payment' | 'intake' = 'status';
+
+  // ── 資訊萃取 / 意圖 ──────────────────────────────────────
+  intake: any = null;
+  intakeLoading = false;
+
+  readonly intentLabel: Record<string, string> = {
+    course_inquiry: '詢問課程',
+    booking:        '要報名',
+    payment:        '繳費相關',
+    complaint:      '抱怨反映',
+    general:        '一般閒聊',
+  };
+  readonly intentColor: Record<string, string> = {
+    course_inquiry: '#42A5F5',
+    booking:        '#66BB6A',
+    payment:        '#FFA726',
+    complaint:      '#EF5350',
+    general:        '#9E9E9E',
+  };
 
   // ── 繳費訂單 ─────────────────────────────────────────────
   paymentOrders: any[] = [];
@@ -84,6 +103,11 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   noteSubmitting         = false;
   editingNoteId: number | null = null;
   editingNoteDraft       = '';
+
+  // ── 圖片上傳 ─────────────────────────────────────────────
+  imageFile:    File | null = null;
+  imagePreview: string | null = null;
+  sendingImage  = false;
 
   // ── Viewer ──────────────────────────────────────────────
   viewerOpen = false;
@@ -149,6 +173,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
     this.loadNotes();
     this.loadHistory();
     this.loadAllTags();
+    this.loadIntake();
   }
 
   refresh() {
@@ -294,7 +319,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   // ── Polling ──────────────────────────────────────────────
 
   private startPolling() {
-    this.pollSub = interval(10000)
+    this.pollSub = interval(5000)
       .pipe(switchMap(() => this.api.getMessages(this.ticketId)))
       .subscribe({
         next: msgs => {
@@ -347,6 +372,54 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
       event.preventDefault();
       this.send();
     }
+  }
+
+  // ── 圖片上傳 ─────────────────────────────────────────────
+
+  onImageSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      this.errorMsg = '僅支援圖片檔案（JPEG / PNG / GIF / WEBP）';
+      return;
+    }
+    this.imageFile = file;
+    const reader   = new FileReader();
+    reader.onload  = e => {
+      this.imagePreview = e.target?.result as string;
+      this.cdr.detectChanges();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  clearImage() {
+    this.imageFile    = null;
+    this.imagePreview = null;
+  }
+
+  sendImage() {
+    if (!this.imageFile || this.sendingImage) return;
+    this.sendingImage = true;
+    this.errorMsg     = '';
+    const file = this.imageFile;
+    this.clearImage();
+
+    this.api.replyImage(this.ticketId, file).subscribe({
+      next: (res: any) => {
+        this.sendingImage = false;
+        if (res?.line_warning) this.errorMsg = res.line_warning;
+        this.pollSub?.unsubscribe();
+        this.refresh();
+        this.startPolling();
+      },
+      error: err => {
+        this.sendingImage = false;
+        this.errorMsg = err?.error?.detail || `圖片傳送失敗（HTTP ${err?.status ?? '??'}）`;
+        this.cdr.detectChanges();
+      },
+    });
   }
 
   // ── 結案 ─────────────────────────────────────────────────
@@ -446,6 +519,52 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
       next: items => { this.paymentOrders = items; this.paymentLoading = false; },
       error: ()    => { this.paymentLoading = false; },
     });
+  }
+
+  loadIntake() {
+    this.intakeLoading = true;
+    this.api.getTicketIntake(this.ticketId).subscribe({
+      next: res => {
+        this.intake        = res ?? null;
+        this.intakeLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: () => { this.intakeLoading = false; },
+    });
+  }
+
+  openIntakeTab() {
+    this.rightTab = 'intake';
+    this.loadIntake();
+  }
+
+  useSuggestedReply() {
+    if (this.intake?.suggested_reply) {
+      this.draft = this.intake.suggested_reply;
+      this.showPanel = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  get missingFields(): string[] {
+    if (!this.intake) return [];
+    const intent = this.intake.intent;
+    const missing: string[] = [];
+    if (intent === 'booking' || intent === 'course_inquiry') {
+      if (!this.intake.phone)          missing.push('電話');
+      if (!this.intake.preferred_date) missing.push('希望日期');
+      if (!this.intake.group_size)     missing.push('人數');
+      if (!this.intake.course_type)    missing.push('課程');
+    }
+    return missing;
+  }
+
+  getIntentLabel(intent: string): string {
+    return this.intentLabel[intent] ?? intent ?? '—';
+  }
+
+  getIntentColor(intent: string): string {
+    return this.intentColor[intent] ?? '#9E9E9E';
   }
 
   openPaymentTab() {

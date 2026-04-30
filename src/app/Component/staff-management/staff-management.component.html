@@ -18,7 +18,9 @@
         <tr>
           <th>姓名</th>
           <th>帳號</th>
+          <th>Email</th>
           <th>角色</th>
+          <th>使用權限</th>
           <th>操作</th>
         </tr>
       </thead>
@@ -26,11 +28,13 @@
         <tr *ngFor="let item of items">
           <td>{{ item.name }}</td>
           <td class="mono">{{ item.username ?? '（未設定）' }}</td>
+          <td class="mono small">{{ item.email ?? '—' }}</td>
           <td>
             <span class="badge" [class.admin]="item.role === 'admin'">
               {{ roleLabel(item.role) }}
             </span>
           </td>
+          <td class="perm-summary">{{ permSummary(item) }}</td>
           <td class="actions">
             <button class="act" (click)="openEdit(item)">編輯</button>
             <button class="act" (click)="openPassword(item)">改密碼</button>
@@ -57,6 +61,10 @@
       <input type="text" [(ngModel)]="createForm.username" placeholder="username" autocomplete="off" />
     </div>
     <div class="field">
+      <label>Email（選填）</label>
+      <input type="email" [(ngModel)]="createForm.email" placeholder="staff@example.com" autocomplete="off" />
+    </div>
+    <div class="field">
       <label>密碼（至少 6 字元）</label>
       <input type="password" [(ngModel)]="createForm.password" autocomplete="new-password" />
     </div>
@@ -66,6 +74,16 @@
         <option value="staff">客服</option>
         <option value="admin">管理者</option>
       </select>
+    </div>
+
+    <div class="field" *ngIf="createForm.role === 'staff'">
+      <label>使用權限</label>
+      <div class="perm-grid">
+        <label class="perm-check" *ngFor="let p of permKeys">
+          <input type="checkbox" [(ngModel)]="createForm.permissions[p.key]" />
+          {{ p.label }}
+        </label>
+      </div>
     </div>
 
     <div class="err" *ngIf="createErr">{{ createErr }}</div>
@@ -93,11 +111,25 @@
       <input type="text" [(ngModel)]="editForm.username" autocomplete="off" />
     </div>
     <div class="field">
+      <label>Email（選填）</label>
+      <input type="email" [(ngModel)]="editForm.email" placeholder="staff@example.com" autocomplete="off" />
+    </div>
+    <div class="field">
       <label>角色</label>
       <select [(ngModel)]="editForm.role">
         <option value="staff">客服</option>
         <option value="admin">管理者</option>
       </select>
+    </div>
+
+    <div class="field" *ngIf="editForm.role === 'staff'">
+      <label>使用權限</label>
+      <div class="perm-grid">
+        <label class="perm-check" *ngFor="let p of permKeys">
+          <input type="checkbox" [(ngModel)]="editForm.permissions![p.key]" />
+          {{ p.label }}
+        </label>
+      </div>
     </div>
 
     <div class="err" *ngIf="editErr">{{ editErr }}</div>

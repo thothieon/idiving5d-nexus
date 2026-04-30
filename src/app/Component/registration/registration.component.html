@@ -1,0 +1,412 @@
+<section class="topbar">
+  <button class="ghost back" (click)="goBack()">← 返回</button>
+  <div class="brand">報名管理</div>
+  <button class="ghost primary" (click)="exportExcel()">⬇ 匯出 Excel</button>
+</section>
+
+<div class="flash success" *ngIf="successMsg">{{ successMsg }}</div>
+<div class="flash error"   *ngIf="errorMsg">{{ errorMsg }}</div>
+
+<!-- 頁籤 -->
+<div class="page-tabs">
+  <button class="tab-btn" [class.active]="pageTab === 'registrations'"
+          (click)="pageTab = 'registrations'">報名名單</button>
+  <button class="tab-btn" [class.active]="pageTab === 'sessions'"
+          (click)="pageTab = 'sessions'">梯次管理</button>
+  <button class="tab-btn" [class.active]="pageTab === 'courses'"
+          (click)="pageTab = 'courses'">課程設定</button>
+</div>
+
+<!-- ── 報名名單 ──────────────────────────────────────────── -->
+<div class="page-body" *ngIf="pageTab === 'registrations'">
+
+  <!-- 篩選列 -->
+  <div class="filter-bar">
+    <select [(ngModel)]="filterCourseId" (ngModelChange)="onCourseFilterChange()">
+      <option value="">所有課程/活動</option>
+      <option *ngFor="let c of courses" [value]="c.id">{{ c.title }}</option>
+    </select>
+
+    <select [(ngModel)]="filterSessionId" (ngModelChange)="loadRegistrations()">
+      <option value="">所有梯次</option>
+      <option *ngFor="let s of filteredSessions" [value]="s.id">{{ s.label }}</option>
+    </select>
+
+    <select [(ngModel)]="filterStatus" (ngModelChange)="loadRegistrations()">
+      <option *ngFor="let o of statusOptions" [value]="o.value">{{ o.label }}</option>
+    </select>
+  </div>
+
+  <div class="hint" *ngIf="loadingRegs">讀取中…</div>
+
+  <div class="empty-hint" *ngIf="!loadingRegs && registrations.length === 0">
+    目前無報名紀錄
+  </div>
+
+  <!-- 報名卡片列表 -->
+  <div class="reg-list" *ngIf="!loadingRegs && registrations.length > 0">
+    <div class="reg-card" *ngFor="let r of registrations" (click)="openRegDetail(r)">
+      <div class="reg-row">
+        <span class="reg-name">{{ r.name }}</span>
+        <span class="badge" [class]="'s-' + r.reg_status">
+          {{ statusLabel[r.reg_status] }}
+          <ng-container *ngIf="r.waitlist_position">（第 {{ r.waitlist_position }} 位）</ng-container>
+        </span>
+      </div>
+      <div class="reg-course">{{ r.course_title }} ｜ {{ r.session_label }}</div>
+      <div class="reg-meta">
+        <span>{{ r.phone }}</span>
+        <span class="badge pay" [class.paid]="r.payment_status === 'paid'">
+          {{ paymentLabel[r.payment_status] }}
+        </span>
+        <span class="reg-time">{{ r.registered_at | date:'MM/dd HH:mm' }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 梯次管理 ──────────────────────────────────────────── -->
+<div class="page-body" *ngIf="pageTab === 'sessions'">
+  <div class="section-header">
+    <span>梯次列表</span>
+    <button class="ghost sm" (click)="openCreateSession()">+ 新增梯次</button>
+  </div>
+
+  <div class="hint" *ngIf="loadingSessions">讀取中…</div>
+
+  <div class="empty-hint" *ngIf="!loadingSessions && sessions.length === 0">
+    尚無梯次，請先新增
+  </div>
+
+  <div class="session-list" *ngIf="!loadingSessions">
+    <div class="session-card" *ngFor="let s of sessions">
+      <div class="session-row">
+        <span class="session-label">{{ s.label }}</span>
+        <span class="badge" [class.s-open]="s.status === 'open'" [class.s-closed]="s.status === 'closed'">
+          {{ s.status === 'open' ? '開放' : '已關閉' }}
+        </span>
+      </div>
+      <div class="session-course">{{ s.course_title }}</div>
+      <div class="session-date">{{ s.start_date }} ～ {{ s.end_date }}</div>
+      <div class="session-quota">
+        正取 {{ s.confirmed_count }} / {{ s.capacity }}
+        <ng-container *ngIf="s.waitlist_capacity > 0">
+          ｜候補 {{ s.waitlist_count }} / {{ s.waitlist_capacity }}
+        </ng-container>
+      </div>
+      <div class="session-note" *ngIf="s.note">{{ s.note }}</div>
+      <div class="session-actions">
+        <button class="ghost sm" (click)="openEditSession(s)">編輯</button>
+        <button class="ghost sm" [class.danger]="s.status === 'open'"
+                (click)="toggleSessionStatus(s)">
+          {{ s.status === 'open' ? '關閉報名' : '開啟報名' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 課程設定 ──────────────────────────────────────────── -->
+<div class="page-body" *ngIf="pageTab === 'courses'">
+  <div class="section-header">
+    <span>課程 / 活動清單</span>
+    <button class="ghost sm" (click)="openCreateCourse()">+ 新增課程</button>
+  </div>
+
+  <div class="empty-hint" *ngIf="courses.length === 0">尚無課程，請先新增</div>
+
+  <div class="session-list">
+    <div class="session-card" *ngFor="let c of courses">
+      <div class="session-row">
+        <div>
+          <span class="session-label">{{ c.title }}</span>
+          <span class="course-code-tag">{{ c.course_code }}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="badge" [class.s-open]="c.type === 'course'" [class.s-waitlist]="c.type === 'activity'">
+            {{ c.type === 'course' ? '課程' : '活動' }}
+          </span>
+          <span class="badge" [class.s-confirmed]="c.is_active" [class.s-cancelled]="!c.is_active">
+            {{ c.is_active ? '上架' : '下架' }}
+          </span>
+        </div>
+      </div>
+      <div class="session-note" *ngIf="c.require_form">⚠ 強制填寫個人資料（OWD/AOW）</div>
+      <div class="session-actions">
+        <button class="ghost sm" (click)="openEditCourse(c)">編輯</button>
+        <button class="ghost sm" [class.danger]="c.is_active" (click)="toggleCourseActive(c)">
+          {{ c.is_active ? '下架' : '上架' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 報名詳情 dialog ──────────────────────────────────── -->
+<div class="overlay" *ngIf="selectedReg">
+  <div class="dialog wide" *ngIf="selectedReg">
+    <div class="dialog-title"># {{ selectedReg.id }} 報名詳情</div>
+
+    <!-- 課程 / 梯次資訊 -->
+    <div class="detail-grid">
+      <div class="detail-row"><span>課程</span><span>{{ selectedReg.course_title }}</span></div>
+      <div class="detail-row"><span>梯次</span><span>{{ selectedReg.session_label }}</span></div>
+      <div class="detail-row"><span>日期</span><span>{{ selectedReg.start_date }} ～ {{ selectedReg.end_date }}</span></div>
+      <div class="detail-row"><span>報名時間</span><span>{{ selectedReg.registered_at | date:'yyyy/MM/dd HH:mm' }}</span></div>
+      <div class="detail-row" *ngIf="selectedReg.confirmed_at">
+        <span>確認時間</span><span>{{ selectedReg.confirmed_at | date:'yyyy/MM/dd HH:mm' }}</span>
+      </div>
+      <div class="detail-row" *ngIf="selectedReg.notes"><span>備註</span><span>{{ selectedReg.notes }}</span></div>
+    </div>
+
+    <div class="dialog-error" *ngIf="updateError">{{ updateError }}</div>
+
+    <!-- 狀態操作 -->
+    <div class="action-group">
+      <div class="action-label">報名狀態</div>
+      <div class="action-btns">
+        <button class="ghost sm primary" [disabled]="updatingReg || selectedReg.reg_status === 'confirmed'"
+                (click)="updateRegStatus('confirmed')">確認</button>
+        <button class="ghost sm" [disabled]="updatingReg || selectedReg.reg_status === 'waitlist'"
+                (click)="updateRegStatus('waitlist')">移至候補</button>
+        <button class="ghost sm danger" [disabled]="updatingReg || selectedReg.reg_status === 'cancelled'"
+                (click)="updateRegStatus('cancelled')">取消</button>
+      </div>
+    </div>
+
+    <!-- 付款操作 -->
+    <div class="action-group">
+      <div class="action-label">付款狀態</div>
+      <div class="action-btns">
+        <button class="ghost sm primary" [disabled]="updatingReg || selectedReg.payment_status === 'paid'"
+                (click)="updatePaymentStatus('paid')">標記已付款</button>
+        <button class="ghost sm" [disabled]="updatingReg || selectedReg.payment_status === 'unpaid'"
+                (click)="updatePaymentStatus('unpaid')">標記未付款</button>
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ── 客戶個人資料（閱讀模式）── -->
+    <div class="customer-section" *ngIf="!editingCustomer">
+      <div class="customer-section-header">
+        <span class="action-label">個人資料</span>
+        <button class="ghost sm" (click)="startEditCustomer()">✏ 編輯</button>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-row"><span>姓名</span><span>{{ selectedReg.name }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.nickname"><span>暱稱</span><span>{{ selectedReg.nickname }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.name_en"><span>英文姓名</span><span>{{ selectedReg.name_en }}</span></div>
+        <div class="detail-row"><span>身分證</span><span>{{ selectedReg.id_number }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.birth_date"><span>出生日期</span><span>{{ selectedReg.birth_date }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.nationality"><span>國籍</span><span>{{ selectedReg.nationality }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.blood_type"><span>血型</span><span>{{ selectedReg.blood_type }}</span></div>
+        <div class="detail-row"><span>行動電話</span><span>{{ selectedReg.phone }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.home_phone"><span>住家電話</span><span>{{ selectedReg.home_phone }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.email"><span>電子郵件</span><span>{{ selectedReg.email }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.mid"><span>MID</span><span>{{ selectedReg.mid }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.address"><span>地址</span><span>{{ selectedReg.address }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.emergency_contact"><span>緊急連絡人</span><span>{{ selectedReg.emergency_contact }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.emergency_phone"><span>連絡人電話</span><span>{{ selectedReg.emergency_phone }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.height"><span>身高</span><span>{{ selectedReg.height }} cm</span></div>
+        <div class="detail-row" *ngIf="selectedReg.weight"><span>體重</span><span>{{ selectedReg.weight }} kg</span></div>
+        <div class="detail-row" *ngIf="selectedReg.vision_left != null"><span>左眼視力</span><span>{{ selectedReg.vision_left }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.vision_right != null"><span>右眼視力</span><span>{{ selectedReg.vision_right }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.payment_date"><span>繳費日期</span><span>{{ selectedReg.payment_date }}</span></div>
+        <div class="detail-row" *ngIf="selectedReg.membership_expiry"><span>會員期限</span><span>{{ selectedReg.membership_expiry }}</span></div>
+      </div>
+    </div>
+
+    <!-- ── 客戶個人資料（編輯模式）── -->
+    <div class="customer-section" *ngIf="editingCustomer">
+      <div class="customer-section-header">
+        <span class="action-label">編輯個人資料</span>
+        <button class="ghost sm" (click)="editingCustomer = false">取消</button>
+      </div>
+
+      <div class="edit-grid">
+        <div class="form-group"><label>姓名 *</label>
+          <input type="text" [(ngModel)]="customerDraft.name" /></div>
+        <div class="form-group"><label>暱稱</label>
+          <input type="text" [(ngModel)]="customerDraft.nickname" /></div>
+        <div class="form-group"><label>英文姓名</label>
+          <input type="text" [(ngModel)]="customerDraft.name_en" /></div>
+        <div class="form-group"><label>出生日期</label>
+          <input type="date" [(ngModel)]="customerDraft.birth_date" /></div>
+        <div class="form-group"><label>國籍</label>
+          <input type="text" [(ngModel)]="customerDraft.nationality" /></div>
+        <div class="form-group"><label>血型</label>
+          <select [(ngModel)]="customerDraft.blood_type">
+            <option [ngValue]="null">—</option>
+            <option *ngFor="let b of bloodTypes" [value]="b">{{ b }}</option>
+          </select></div>
+        <div class="form-group"><label>行動電話 *</label>
+          <input type="tel" [(ngModel)]="customerDraft.phone" /></div>
+        <div class="form-group"><label>住家電話</label>
+          <input type="tel" [(ngModel)]="customerDraft.home_phone" /></div>
+        <div class="form-group"><label>電子郵件</label>
+          <input type="email" [(ngModel)]="customerDraft.email" /></div>
+        <div class="form-group"><label>MID</label>
+          <input type="text" [(ngModel)]="customerDraft.mid" /></div>
+        <div class="form-group full"><label>地址</label>
+          <input type="text" [(ngModel)]="customerDraft.address" /></div>
+        <div class="form-group"><label>緊急連絡人</label>
+          <input type="text" [(ngModel)]="customerDraft.emergency_contact" /></div>
+        <div class="form-group"><label>連絡人電話</label>
+          <input type="tel" [(ngModel)]="customerDraft.emergency_phone" /></div>
+        <div class="form-group"><label>身高 (cm)</label>
+          <input type="number" [(ngModel)]="customerDraft.height" step="0.1" /></div>
+        <div class="form-group"><label>體重 (kg)</label>
+          <input type="number" [(ngModel)]="customerDraft.weight" step="0.1" /></div>
+        <div class="form-group"><label>左眼視力</label>
+          <input type="number" [(ngModel)]="customerDraft.vision_left" step="0.01" /></div>
+        <div class="form-group"><label>右眼視力</label>
+          <input type="number" [(ngModel)]="customerDraft.vision_right" step="0.01" /></div>
+        <div class="form-group"><label>繳費日期</label>
+          <input type="date" [(ngModel)]="customerDraft.payment_date" /></div>
+        <div class="form-group"><label>會員期限</label>
+          <input type="date" [(ngModel)]="customerDraft.membership_expiry" /></div>
+      </div>
+
+      <div class="form-error" *ngIf="customerSaveErr">{{ customerSaveErr }}</div>
+
+      <div class="dialog-footer" style="margin-top:12px">
+        <button class="ghost" (click)="editingCustomer = false">取消</button>
+        <button class="ghost primary" [disabled]="savingCustomer" (click)="saveCustomer()">
+          {{ savingCustomer ? '儲存中…' : '儲存' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="dialog-footer" *ngIf="!editingCustomer">
+      <button class="ghost" (click)="closeRegDetail()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 課程表單 dialog ───────────────────────────────────── -->
+<div class="overlay" *ngIf="showCourseForm">
+  <div class="dialog wide">
+    <div class="dialog-title">{{ editingCourseId ? '編輯課程' : '新增課程' }}</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>課程代碼 *</label>
+        <input type="text" [(ngModel)]="courseDraft.course_code" placeholder="例：OWD" />
+      </div>
+      <div class="form-group">
+        <label>類型</label>
+        <select [(ngModel)]="courseDraft.type">
+          <option value="course">課程</option>
+          <option value="activity">活動</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>課程名稱 *</label>
+      <input type="text" [(ngModel)]="courseDraft.title" placeholder="例：OWD 潛水課程" />
+    </div>
+
+    <div class="form-group">
+      <label>說明</label>
+      <input type="text" [(ngModel)]="courseDraft.description" placeholder="選填" />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>排序</label>
+        <input type="number" [(ngModel)]="courseDraft.sort_order" min="0" />
+      </div>
+      <div class="form-group">
+        <label>狀態</label>
+        <select [(ngModel)]="courseDraft.is_active">
+          <option [ngValue]="1">上架</option>
+          <option [ngValue]="0">下架</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group toggle-row">
+      <label>強制填寫個人資料（OWD / AOW）</label>
+      <label class="switch">
+        <input type="checkbox" [checked]="courseDraft.require_form === 1"
+               (change)="courseDraft.require_form = $any($event.target).checked ? 1 : 0" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="form-error" *ngIf="courseFormError">{{ courseFormError }}</div>
+
+    <div class="dialog-footer">
+      <button class="ghost" (click)="showCourseForm = false">取消</button>
+      <button class="ghost primary" [disabled]="savingCourse" (click)="saveCourse()">
+        {{ savingCourse ? '儲存中…' : '儲存' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 梯次表單 dialog ───────────────────────────────────── -->
+<div class="overlay" *ngIf="showSessionForm">
+  <div class="dialog wide">
+    <div class="dialog-title">{{ editingSessionId ? '編輯梯次' : '新增梯次' }}</div>
+
+    <div class="form-group">
+      <label>課程 / 活動 *</label>
+      <select [(ngModel)]="sessionDraft.course_id">
+        <option [value]="0" disabled>請選擇</option>
+        <option *ngFor="let c of courses" [value]="c.id">{{ c.title }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>梯次名稱 *</label>
+      <input type="text" [(ngModel)]="sessionDraft.label" placeholder="例：2026/06 第一梯" />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>開始日期 *</label>
+        <input type="date" [(ngModel)]="sessionDraft.start_date" />
+      </div>
+      <div class="form-group">
+        <label>結束日期 *</label>
+        <input type="date" [(ngModel)]="sessionDraft.end_date" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>正取名額</label>
+        <input type="number" [(ngModel)]="sessionDraft.capacity" min="1" />
+      </div>
+      <div class="form-group">
+        <label>候補名額（0=不開放）</label>
+        <input type="number" [(ngModel)]="sessionDraft.waitlist_capacity" min="0" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>狀態</label>
+      <select [(ngModel)]="sessionDraft.status">
+        <option value="open">開放報名</option>
+        <option value="closed">關閉報名</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>備註</label>
+      <input type="text" [(ngModel)]="sessionDraft.note" placeholder="選填" />
+    </div>
+
+    <div class="form-error" *ngIf="sessionFormError">{{ sessionFormError }}</div>
+
+    <div class="dialog-footer">
+      <button class="ghost" (click)="showSessionForm = false">取消</button>
+      <button class="ghost primary" [disabled]="savingSession" (click)="saveSession()">
+        {{ savingSession ? '儲存中…' : '儲存' }}
+      </button>
+    </div>
+  </div>
+</div>

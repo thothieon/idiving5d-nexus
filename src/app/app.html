@@ -9,10 +9,12 @@
     <div class="actions">
       <ng-container *ngIf="hasToken(); else notLoggedIn">
         <a routerLink="/admin/turn" class="link">🎫 客服後台</a>
-        <a routerLink="/admin/questions" class="link" *ngIf="isAdmin()">問題蒐集</a>
-        <a routerLink="/admin/courses" class="link" *ngIf="isAdmin()">課程排程</a>
-        <a routerLink="/admin/pagestats" class="link" *ngIf="isAdmin()">📊 頁面分析</a>
-        <a routerLink="/admin/staff" class="link" *ngIf="isAdmin()">👥 帳號管理</a>
+        <a routerLink="/admin/questions"    class="link" *ngIf="canQuestions()">問題蒐集</a>
+        <a routerLink="/admin/courses"      class="link" *ngIf="canCourses()">課程排程</a>
+        <a routerLink="/admin/registration" class="link" *ngIf="canRegistration()">📋 報名管理</a>
+        <a routerLink="/admin/pagestats"    class="link" *ngIf="canPagestats()">📊 頁面分析</a>
+        <a routerLink="/admin/linestats"    class="link" *ngIf="canLinestats()">📊 LINE 分析</a>
+        <a routerLink="/admin/staff"        class="link" *ngIf="isAdmin()">👥 帳號管理</a>
         <button class="ghost" (click)="clearToken()">登出</button>
       </ng-container>
       <ng-template #notLoggedIn>

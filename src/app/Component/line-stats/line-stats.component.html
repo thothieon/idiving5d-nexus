@@ -1,0 +1,212 @@
+<!-- line-stats.component.html -->
+<div class="ls-wrap">
+
+  <!-- 頂部 -->
+  <header class="ls-header">
+    <h1 class="ls-title">📊 LINE 客服分析</h1>
+    <div class="ls-controls">
+      <label>近</label>
+      <select [(ngModel)]="days" (change)="onDaysChange()">
+        <option [value]="7">7 天</option>
+        <option [value]="14">14 天</option>
+        <option [value]="30">30 天</option>
+        <option [value]="90">90 天</option>
+      </select>
+      <button class="refresh-btn" (click)="loadAll()" [disabled]="loading">
+        {{ loading ? '載入中…' : '重新整理' }}
+      </button>
+      <button class="report-btn" (click)="sendDailyReport()" [disabled]="reportSending">
+        {{ reportSending ? '發送中…' : '📨 立即發送摘要' }}
+      </button>
+    </div>
+  </header>
+
+  <div class="report-msg" *ngIf="reportMsg">{{ reportMsg }}</div>
+
+  <!-- Tab 列 -->
+  <nav class="ls-tabs">
+    <button [class.active]="tab==='overview'" (click)="tab='overview'">總覽</button>
+    <button [class.active]="tab==='daily'"    (click)="tab='daily'">每日趨勢</button>
+    <button [class.active]="tab==='peak'"     (click)="tab='peak'">尖峰時段</button>
+    <button [class.active]="tab==='tickets'"  (click)="tab='tickets'">工單分析</button>
+    <button [class.active]="tab==='intents'"  (click)="tab='intents'">意圖分析</button>
+    <button [class.active]="tab==='types'"    (click)="tab='types'">訊息類型</button>
+    <button [class.active]="tab==='courses'"  (click)="tab='courses'">課程熱度</button>
+  </nav>
+
+  <!-- ── 總覽 ── -->
+  <section *ngIf="tab==='overview'" class="ls-section">
+
+    <div class="card-row" *ngIf="overview">
+      <div class="stat-card today">
+        <div class="sc-label">今日客人訊息</div>
+        <div class="sc-value">{{ overview.today.msgs_in }}</div>
+      </div>
+      <div class="stat-card today">
+        <div class="sc-label">今日客服回覆</div>
+        <div class="sc-value">{{ overview.today.msgs_out }}</div>
+      </div>
+      <div class="stat-card today">
+        <div class="sc-label">今日新工單</div>
+        <div class="sc-value">{{ overview.today.tickets }}</div>
+      </div>
+      <div class="stat-card today">
+        <div class="sc-label">今日新客戶</div>
+        <div class="sc-value">{{ overview.today.customers }}</div>
+      </div>
+    </div>
+
+    <div class="card-row mt16" *ngIf="overview">
+      <div class="stat-card period">
+        <div class="sc-label">近 {{ days }} 日訊息量</div>
+        <div class="sc-value">{{ overview.period.msgs_in }}</div>
+      </div>
+      <div class="stat-card period">
+        <div class="sc-label">目前活躍工單</div>
+        <div class="sc-value">{{ overview.period.active_tickets }}</div>
+      </div>
+      <div class="stat-card period">
+        <div class="sc-label">近 {{ days }} 日新客戶</div>
+        <div class="sc-value">{{ overview.period.new_customers }}</div>
+      </div>
+      <div class="stat-card period">
+        <div class="sc-label">近 {{ days }} 日結案率</div>
+        <div class="sc-value">{{ overview.period.close_rate_pct }}%</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── 每日趨勢 ── -->
+  <section *ngIf="tab==='daily'" class="ls-section">
+    <div class="chart-wrap">
+      <div class="bar-chart">
+        <div class="bar-group" *ngFor="let d of daily">
+          <div class="bar-stacks">
+            <div class="bar-seg in"  title="客人訊息 {{ d.msgs_in }}"
+                 [style.height]="barH(d.msgs_in, maxDailyMsgs)"></div>
+            <div class="bar-seg out" title="客服回覆 {{ d.msgs_out }}"
+                 [style.height]="barH(d.msgs_out, maxDailyMsgs)"></div>
+          </div>
+          <div class="bar-label">{{ shortDate(d.date) }}</div>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-dot in"></span> 客人訊息
+        <span class="legend-dot out"></span> 客服回覆
+      </div>
+    </div>
+
+    <!-- 每日表格 -->
+    <div class="ls-table-wrap">
+      <table class="ls-table">
+        <thead><tr>
+          <th>日期</th><th>客人訊息</th><th>客服回覆</th><th>新工單</th><th>新客戶</th>
+        </tr></thead>
+        <tbody>
+          <tr *ngFor="let d of daily">
+            <td>{{ d.date }}</td>
+            <td class="num in-col">{{ d.msgs_in }}</td>
+            <td class="num out-col">{{ d.msgs_out }}</td>
+            <td class="num">{{ d.tickets }}</td>
+            <td class="num">{{ d.customers }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── 尖峰時段 ── -->
+  <section *ngIf="tab==='peak'" class="ls-section">
+    <p class="ls-desc">過去 {{ days }} 天，各小時累積的客人訊息量</p>
+    <div class="peak-grid">
+      <div class="peak-cell" *ngFor="let h of peakHours">
+        <div class="peak-bar-wrap">
+          <div class="peak-bar"
+               [style.height]="barH(h.cnt, maxPeakCnt)"
+               [style.background]="peakColor(h.cnt)">
+          </div>
+        </div>
+        <div class="peak-hour">{{ h.hour }}時</div>
+        <div class="peak-cnt">{{ h.cnt }}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 工單分析 ── -->
+  <section *ngIf="tab==='tickets'" class="ls-section">
+
+    <div class="card-row" *ngIf="ticketStats">
+      <div class="stat-card period">
+        <div class="sc-label">平均首次回應</div>
+        <div class="sc-value sm">{{ formatMin(ticketStats.avg_first_reply_min) }}</div>
+      </div>
+      <div class="stat-card period">
+        <div class="sc-label">平均結案時長</div>
+        <div class="sc-value sm">{{ formatMin(ticketStats.avg_resolve_min) }}</div>
+      </div>
+    </div>
+
+    <div class="dist-list mt16" *ngIf="ticketStats">
+      <div class="dist-row" *ngFor="let s of ticketStats.status_dist">
+        <span class="dist-label">{{ s.label }}</span>
+        <div class="dist-bar-wrap">
+          <div class="dist-bar" [style.width.%]="s.cnt / (ticketStats.status_dist[0]?.cnt || 1) * 100"></div>
+        </div>
+        <span class="dist-cnt">{{ s.cnt }}</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── 意圖分析 ── -->
+  <section *ngIf="tab==='intents'" class="ls-section">
+    <div class="empty-hint" *ngIf="!intents.length">尚無意圖資料（需等 AI 萃取累積）</div>
+    <div class="dist-list" *ngIf="intents.length">
+      <div class="dist-row" *ngFor="let i of intents">
+        <span class="dist-label">
+          <span class="intent-dot" [style.background]="i.color"></span>
+          {{ i.label }}
+        </span>
+        <div class="dist-bar-wrap">
+          <div class="dist-bar" [style.width.%]="i.pct" [style.background]="i.color"></div>
+        </div>
+        <span class="dist-cnt">{{ i.cnt }} <small>({{ i.pct }}%)</small></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 訊息類型 ── -->
+  <section *ngIf="tab==='types'" class="ls-section">
+    <div class="dist-list">
+      <div class="dist-row" *ngFor="let t of msgTypes">
+        <span class="dist-label">
+          <span class="intent-dot" [style.background]="t.color"></span>
+          {{ t.label }}
+        </span>
+        <div class="dist-bar-wrap">
+          <div class="dist-bar" [style.width.%]="t.pct" [style.background]="t.color"></div>
+        </div>
+        <span class="dist-cnt">{{ t.cnt }} <small>({{ t.pct }}%)</small></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 課程熱度 ── -->
+  <section *ngIf="tab==='courses'" class="ls-section">
+    <div class="empty-hint" *ngIf="!courses.length">尚無課程詢問資料（需等 AI 萃取累積）</div>
+    <div class="dist-list" *ngIf="courses.length">
+      <div class="dist-row" *ngFor="let c of courses; let i = index">
+        <span class="dist-label rank">
+          <span class="rank-num">{{ i+1 }}</span>
+          {{ c.course_type }}
+        </span>
+        <div class="dist-bar-wrap">
+          <div class="dist-bar" [style.width.%]="c.pct" style="background:#42A5F5"></div>
+        </div>
+        <span class="dist-cnt">{{ c.cnt }} <small>({{ c.pct }}%)</small></span>
+      </div>
+    </div>
+  </section>
+
+</div>

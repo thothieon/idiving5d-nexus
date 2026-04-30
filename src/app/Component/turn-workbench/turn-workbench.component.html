@@ -46,23 +46,55 @@
 </section>
 
 <section *ngIf="mode==='turn'">
-  <h2>輪到我回（open）</h2>
-  <app-ticket-list-item
-    *ngFor="let t of filtered(openItems, 'open')"
-    [ticket]="t"
-  ></app-ticket-list-item>
-  <div class="empty" *ngIf="filtered(openItems, 'open').length===0 && !loading">
-    {{ search.trim() ? '找不到符合「' + search.trim() + '」的 open 工單' : '目前沒有 open 工單' }}
-  </div>
 
-  <h2 class="mt">等客人回（pending）</h2>
-  <app-ticket-list-item
-    *ngFor="let t of filtered(pendingItems, 'pending')"
-    [ticket]="t"
-  ></app-ticket-list-item>
-  <div class="empty" *ngIf="filtered(pendingItems, 'pending').length===0 && !loading">
-    {{ search.trim() ? '找不到符合「' + search.trim() + '」的 pending 工單' : '目前沒有 pending 工單' }}
-  </div>
+  <!-- 第一區塊 -->
+  <ng-container *ngIf="!swapped">
+    <h2 class="section-hd">
+      輪到我回（open）
+      <button class="swap-btn" (click)="swapped=true" title="把「等客人回」移到上面">⇅ 對調</button>
+    </h2>
+    <app-ticket-list-item
+      *ngFor="let t of filtered(openItems, 'open')"
+      [ticket]="t"
+    ></app-ticket-list-item>
+    <div class="empty" *ngIf="filtered(openItems, 'open').length===0 && !loading">
+      {{ search.trim() ? '找不到符合「' + search.trim() + '」的 open 工單' : '目前沒有 open 工單' }}
+    </div>
+
+    <h2 class="section-hd mt">等客人回（pending）</h2>
+    <app-ticket-list-item
+      *ngFor="let t of filtered(pendingItems, 'pending')"
+      [ticket]="t"
+    ></app-ticket-list-item>
+    <div class="empty" *ngIf="filtered(pendingItems, 'pending').length===0 && !loading">
+      {{ search.trim() ? '找不到符合「' + search.trim() + '」的 pending 工單' : '目前沒有 pending 工單' }}
+    </div>
+  </ng-container>
+
+  <!-- 對調後：pending 在上、open 在下 -->
+  <ng-container *ngIf="swapped">
+    <h2 class="section-hd">
+      等客人回（pending）
+      <button class="swap-btn" (click)="swapped=false" title="把「輪到我回」移回上面">⇅ 對調</button>
+    </h2>
+    <app-ticket-list-item
+      *ngFor="let t of filtered(pendingItems, 'pending')"
+      [ticket]="t"
+    ></app-ticket-list-item>
+    <div class="empty" *ngIf="filtered(pendingItems, 'pending').length===0 && !loading">
+      {{ search.trim() ? '找不到符合「' + search.trim() + '」的 pending 工單' : '目前沒有 pending 工單' }}
+    </div>
+
+    <h2 class="section-hd mt">輪到我回（open）</h2>
+    <app-ticket-list-item
+      *ngFor="let t of filtered(openItems, 'open')"
+      [ticket]="t"
+    ></app-ticket-list-item>
+    <div class="empty" *ngIf="filtered(openItems, 'open').length===0 && !loading">
+      {{ search.trim() ? '找不到符合「' + search.trim() + '」的 open 工單' : '目前沒有 open 工單' }}
+    </div>
+  </ng-container>
+
 </section>
 
 <section *ngIf="mode==='closed'">
