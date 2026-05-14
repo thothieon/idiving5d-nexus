@@ -1,0 +1,206 @@
+<section class="topbar">
+  <div class="brand">客戶管理</div>
+</section>
+
+<div class="flash success" *ngIf="successMsg">{{ successMsg }}</div>
+<div class="flash error"   *ngIf="errorMsg">{{ errorMsg }}</div>
+
+<!-- 搜尋列 -->
+<div class="search-bar">
+  <input class="search-input" type="text" [(ngModel)]="searchQ"
+         placeholder="搜尋姓名 / 電話 / 身分證"
+         (keyup.enter)="onSearch()" />
+  <button class="ghost primary" (click)="onSearch()">搜尋</button>
+  <span class="total-hint">共 {{ total }} 位客戶</span>
+</div>
+
+<!-- 客戶列表 -->
+<div class="hint" *ngIf="loading">讀取中…</div>
+
+<div class="customer-table" *ngIf="!loading">
+  <div class="table-header">
+    <span class="col-name">姓名</span>
+    <span class="col-phone">電話</span>
+    <span class="col-email">Email</span>
+    <span class="col-mid">會員編號</span>
+    <span class="col-expiry">會籍到期</span>
+    <span class="col-count">報名次數</span>
+  </div>
+
+  <div class="table-row" *ngFor="let c of customers" (click)="openDetail(c)">
+    <span class="col-name">
+      {{ c.name }}
+      <span class="nickname" *ngIf="c.nickname">（{{ c.nickname }}）</span>
+    </span>
+    <span class="col-phone">{{ c.phone }}</span>
+    <span class="col-email">{{ c.email || '—' }}</span>
+    <span class="col-mid">{{ c.mid || '—' }}</span>
+    <span class="col-expiry" [class.expired]="c.membership_expiry && c.membership_expiry < today">
+      {{ c.membership_expiry || '—' }}
+    </span>
+    <span class="col-count">
+      {{ c.reg_count }} 次
+      <span class="confirmed-badge" *ngIf="c.confirmed_count > 0">（{{ c.confirmed_count }} 完成）</span>
+    </span>
+  </div>
+
+  <div class="empty-hint" *ngIf="customers.length === 0">無符合條件的客戶</div>
+</div>
+
+<!-- 分頁 -->
+<div class="pagination" *ngIf="total > pageSize">
+  <button class="ghost sm" [disabled]="page === 0" (click)="prevPage()">← 上一頁</button>
+  <span>{{ page + 1 }} / {{ totalPages }}</span>
+  <button class="ghost sm" [disabled]="(page + 1) * pageSize >= total" (click)="nextPage()">下一頁 →</button>
+</div>
+
+<!-- ══ 詳細資料 Modal ══ -->
+<div class="overlay" *ngIf="selected || loadingDetail" (click)="closeDetail()"></div>
+
+<div class="modal" *ngIf="selected || loadingDetail">
+  <div class="modal-header">
+    <span class="modal-title">{{ selected?.name || '載入中…' }}</span>
+    <div class="modal-header-actions">
+      <button class="ghost sm primary" *ngIf="selected && !loadingDetail" (click)="startEdit()">✏ 編輯</button>
+      <button class="ghost sm" (click)="closeDetail()">✕</button>
+    </div>
+  </div>
+
+  <div class="hint" *ngIf="loadingDetail">載入中…</div>
+
+  <div class="modal-body" *ngIf="selected && !loadingDetail">
+
+    <!-- 基本資料 + 聯絡方式 並排 -->
+    <div class="two-col">
+      <div>
+        <div class="section-title">基本資料</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span>姓名</span><span>{{ selected.name }}</span></div>
+          <div class="detail-row"><span>暱稱</span><span>{{ selected.nickname || '—' }}</span></div>
+          <div class="detail-row"><span>英文姓名</span><span>{{ selected.name_en || '—' }}</span></div>
+          <div class="detail-row"><span>身分證</span><span>{{ selected.id_number }}</span></div>
+          <div class="detail-row"><span>出生日期</span><span>{{ selected.birth_date || '—' }}（{{ age(selected.birth_date) }}）</span></div>
+          <div class="detail-row"><span>國籍</span><span>{{ selected.nationality || '—' }}</span></div>
+          <div class="detail-row"><span>血型</span><span>{{ selected.blood_type || '—' }}</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">聯絡方式</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span>行動電話</span><span>{{ selected.phone }}</span></div>
+          <div class="detail-row"><span>住家電話</span><span>{{ selected.home_phone || '—' }}</span></div>
+          <div class="detail-row"><span>Email</span><span>{{ selected.email || '—' }}</span></div>
+          <div class="detail-row"><span>地址</span><span>{{ selected.address || '—' }}</span></div>
+          <div class="detail-row"><span>緊急聯絡人</span><span>{{ selected.emergency_contact || '—' }}</span></div>
+          <div class="detail-row"><span>緊急電話</span><span>{{ selected.emergency_phone || '—' }}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 身體數值 + 會員資訊 並排 -->
+    <div class="two-col">
+      <div>
+        <div class="section-title">身體數值</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span>身高</span><span>{{ selected.height ? selected.height + ' cm' : '—' }}</span></div>
+          <div class="detail-row"><span>體重</span><span>{{ selected.weight ? selected.weight + ' kg' : '—' }}</span></div>
+          <div class="detail-row"><span>鞋碼</span><span>{{ selected.shoe_size || '—' }}</span></div>
+          <div class="detail-row"><span>左眼視力</span><span>{{ selected.vision_left ?? '—' }}</span></div>
+          <div class="detail-row"><span>右眼視力</span><span>{{ selected.vision_right ?? '—' }}</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">會員資訊</div>
+        <div class="detail-grid">
+          <div class="detail-row"><span>會員編號</span><span>{{ selected.mid || '—' }}</span></div>
+          <div class="detail-row"><span>繳費日期</span><span>{{ selected.payment_date || '—' }}</span></div>
+          <div class="detail-row">
+            <span>會籍到期</span>
+            <span [class.text-danger]="selected.membership_expiry && selected.membership_expiry < today">
+              {{ selected.membership_expiry || '—' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 報名歷程 -->
+    <div class="section-title">報名歷程（{{ selectedRegs.length }} 筆）</div>
+    <div class="reg-history" *ngIf="selectedRegs.length > 0">
+      <div class="reg-item" *ngFor="let r of selectedRegs">
+        <div class="reg-course">
+          {{ r.course_title }}
+          <span class="badge" [class]="'s-' + r.reg_status">{{ statusLabel[r.reg_status] }}</span>
+        </div>
+        <div class="reg-meta">{{ r.session_label }}｜{{ r.start_date }} ~ {{ r.end_date }}</div>
+        <div class="reg-meta">報名：{{ r.registered_at | date:'yyyy/MM/dd' }}</div>
+      </div>
+    </div>
+    <div class="empty-hint" *ngIf="selectedRegs.length === 0">尚無報名紀錄</div>
+
+  </div>
+</div>
+
+<!-- ══ 編輯 Modal ══ -->
+<div class="overlay edit-overlay" *ngIf="editMode" (click)="editMode = false"></div>
+
+<div class="modal edit-modal" *ngIf="editMode">
+  <div class="modal-header">
+    <span class="modal-title">編輯客戶資料 — {{ selected?.name }}</span>
+    <button class="ghost sm" (click)="editMode = false">✕</button>
+  </div>
+
+  <div class="modal-body">
+
+    <div class="edit-section-title">基本資料</div>
+    <div class="edit-grid">
+      <label>姓名 <input [(ngModel)]="editForm.name" /></label>
+      <label>暱稱 <input [(ngModel)]="editForm.nickname" /></label>
+      <label>英文姓名 <input [(ngModel)]="editForm.name_en" /></label>
+      <label>出生日期 <input type="date" [(ngModel)]="editForm.birth_date" /></label>
+      <label>國籍 <input [(ngModel)]="editForm.nationality" /></label>
+      <label>血型
+        <select [(ngModel)]="editForm.blood_type">
+          <option value="">—</option>
+          <option>A</option><option>B</option><option>O</option><option>AB</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="edit-section-title">聯絡方式</div>
+    <div class="edit-grid">
+      <label>行動電話 <input [(ngModel)]="editForm.phone" /></label>
+      <label>住家電話 <input [(ngModel)]="editForm.home_phone" /></label>
+      <label>Email <input type="email" [(ngModel)]="editForm.email" /></label>
+      <label class="full">地址 <input [(ngModel)]="editForm.address" /></label>
+      <label>緊急聯絡人 <input [(ngModel)]="editForm.emergency_contact" /></label>
+      <label>緊急聯絡電話 <input [(ngModel)]="editForm.emergency_phone" /></label>
+    </div>
+
+    <div class="edit-section-title">身體數值</div>
+    <div class="edit-grid">
+      <label>身高(cm) <input type="number" [(ngModel)]="editForm.height" /></label>
+      <label>體重(kg) <input type="number" [(ngModel)]="editForm.weight" /></label>
+      <label>鞋碼 <input type="number" step="0.5" [(ngModel)]="editForm.shoe_size" /></label>
+      <label>左眼視力 <input type="number" step="0.01" [(ngModel)]="editForm.vision_left" /></label>
+      <label>右眼視力 <input type="number" step="0.01" [(ngModel)]="editForm.vision_right" /></label>
+    </div>
+
+    <div class="edit-section-title">會員資訊</div>
+    <div class="edit-grid">
+      <label>會員編號 <input [(ngModel)]="editForm.mid" /></label>
+      <label>繳費日期 <input type="date" [(ngModel)]="editForm.payment_date" /></label>
+      <label>會籍到期 <input type="date" [(ngModel)]="editForm.membership_expiry" /></label>
+    </div>
+
+    <div class="edit-error" *ngIf="saveError">{{ saveError }}</div>
+
+    <div class="edit-actions">
+      <button class="ghost primary" [disabled]="saving" (click)="saveEdit()">
+        {{ saving ? '儲存中…' : '💾 儲存變更' }}
+      </button>
+      <button class="ghost" (click)="editMode = false">取消</button>
+    </div>
+
+  </div>
+</div>

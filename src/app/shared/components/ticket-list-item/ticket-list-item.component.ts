@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { TicketListItem } from '../../../Service/api/models';
+import { TicketListItem, SESSION_STATUS_COLOR } from '../../../Service/api/models';
 
 @Component({
   standalone: true,
@@ -20,7 +20,7 @@ export class TicketListItemComponent {
   }
 
   isOverdue(): boolean {
-    const base = this.ticket.updated_at || this.ticket.last_customer_message_at || '';
+    const base = this.ticket.last_customer_message_at || this.ticket.updated_at || '';
     const ts = Date.parse(base);
     if (!ts) return false;
     return Date.now() - ts > 60 * 60 * 1000;
@@ -36,8 +36,18 @@ export class TicketListItemComponent {
     return '（未知客戶）';
   }
 
-  subject(): string {
-    return this.ticket.subject || '（未填 subject）';
+  statusColor(): string {
+    return SESSION_STATUS_COLOR[this.ticket.current_status] ?? '#9E9E9E';
+  }
+
+  formatUpdatedAt(): string {
+    if (!this.ticket.updated_at) return '';
+    const d = new Date(this.ticket.updated_at);
+    if (isNaN(d.getTime())) return this.ticket.updated_at;
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return isToday ? hm : `${d.getMonth()+1}/${d.getDate()} ${hm}`;
   }
 
   preview(): string {

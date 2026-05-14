@@ -24,6 +24,8 @@ from app.routes_pageviews  import admin_router  as pageviews_admin_router
 from app.routes_linestats    import router        as linestats_router
 from app.routes_registration import public_router as reg_public_router
 from app.routes_registration import admin_router  as reg_admin_router
+from app.routes_todo         import router        as todo_router
+from app.routes_rag          import router        as rag_router
 from app.daily_report        import daily_report_scheduler
 
 
@@ -49,7 +51,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Admin-Token"],
 )
 
@@ -72,6 +74,8 @@ app.include_router(pageviews_admin_router,  prefix="/admin/api")
 app.include_router(linestats_router,        prefix="/admin/api")
 app.include_router(reg_public_router,       prefix="/api")
 app.include_router(reg_admin_router,        prefix="/admin/api")
+app.include_router(todo_router,             prefix="/admin/api")
+app.include_router(rag_router,              prefix="/admin/api")
 
 
 # 根路由：確認服務是否正常運行

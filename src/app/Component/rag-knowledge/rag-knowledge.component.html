@@ -1,0 +1,102 @@
+<div class="rag-page">
+  <div class="page-header">
+    <h2>📚 知識庫管理</h2>
+    <div class="header-actions">
+      <select [(ngModel)]="filterCategory" (change)="load()" class="cat-filter">
+        <option value="">全部分類</option>
+        <option *ngFor="let c of categories" [value]="c">{{ categoryLabel[c] }}</option>
+      </select>
+      <button class="btn-reembed" (click)="reembedAll()" [disabled]="reembedding">
+        {{ reembedding ? '重建中…' : '重建 Embedding' }}
+      </button>
+      <button class="btn-add" (click)="openAdd()">＋ 新增片段</button>
+    </div>
+  </div>
+
+  <div class="msg-bar success" *ngIf="successMsg">{{ successMsg }}</div>
+  <div class="msg-bar error"   *ngIf="errorMsg">{{ errorMsg }}</div>
+
+  <!-- 新增表單 -->
+  <div class="add-form" *ngIf="showAddForm">
+    <h3>新增知識片段</h3>
+    <div class="form-row">
+      <label>分類</label>
+      <select [(ngModel)]="draft.category">
+        <option *ngFor="let c of categories" [value]="c">{{ categoryLabel[c] }}</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>標題</label>
+      <input [(ngModel)]="draft.title" placeholder="例：OW 課程費用說明" maxlength="200" />
+    </div>
+    <div class="form-row">
+      <label>內容</label>
+      <textarea [(ngModel)]="draft.content" rows="6" placeholder="詳細說明文字…"></textarea>
+    </div>
+    <div class="form-row inline">
+      <label>啟用</label>
+      <input type="checkbox" [ngModel]="draft.is_active === 1" (ngModelChange)="draft.is_active = $event ? 1 : 0" />
+    </div>
+    <div class="form-error" *ngIf="addError">{{ addError }}</div>
+    <div class="form-actions">
+      <button (click)="submitAdd()" [disabled]="adding" class="btn-save">{{ adding ? '儲存中…' : '儲存' }}</button>
+      <button (click)="cancelAdd()" class="btn-cancel">取消</button>
+    </div>
+  </div>
+
+  <!-- 列表 -->
+  <div class="loading-hint" *ngIf="loading">載入中…</div>
+
+  <div class="chunk-list" *ngIf="!loading">
+    <div class="chunk-empty" *ngIf="chunks.length === 0">目前沒有知識片段</div>
+
+    <div class="chunk-card" *ngFor="let c of chunks" [class.inactive]="!c.is_active">
+
+      <!-- 編輯模式 -->
+      <ng-container *ngIf="editingId === c.id">
+        <div class="form-row">
+          <label>分類</label>
+          <select [(ngModel)]="editDraft.category">
+            <option *ngFor="let cat of categories" [value]="cat">{{ categoryLabel[cat] }}</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>標題</label>
+          <input [(ngModel)]="editDraft.title" maxlength="200" />
+        </div>
+        <div class="form-row">
+          <label>內容</label>
+          <textarea [(ngModel)]="editDraft.content" rows="6"></textarea>
+        </div>
+        <div class="form-row inline">
+          <label>啟用</label>
+          <input type="checkbox" [ngModel]="editDraft.is_active === 1" (ngModelChange)="editDraft.is_active = $event ? 1 : 0" />
+        </div>
+        <div class="form-error" *ngIf="editError">{{ editError }}</div>
+        <div class="form-actions">
+          <button (click)="submitEdit()" [disabled]="editing" class="btn-save">{{ editing ? '儲存中…' : '儲存' }}</button>
+          <button (click)="cancelEdit()" class="btn-cancel">取消</button>
+        </div>
+      </ng-container>
+
+      <!-- 檢視模式 -->
+      <ng-container *ngIf="editingId !== c.id">
+        <div class="chunk-top">
+          <span class="cat-badge cat-{{ c.category }}">{{ categoryLabel[c.category] }}</span>
+          <span class="chunk-title">{{ c.title }}</span>
+          <span class="emb-badge" [class.no-emb]="!c.has_embedding" title="{{ c.has_embedding ? 'Embedding 已建立' : 'Embedding 尚未建立' }}">
+            {{ c.has_embedding ? '✓ emb' : '✗ emb' }}
+          </span>
+          <span class="inactive-tag" *ngIf="!c.is_active">已停用</span>
+        </div>
+        <div class="chunk-content">{{ c.content }}</div>
+        <div class="chunk-actions">
+          <button (click)="openEdit(c)" class="btn-edit">編輯</button>
+          <button (click)="toggleActive(c)" class="btn-toggle">{{ c.is_active ? '停用' : '啟用' }}</button>
+          <button (click)="deleteChunk(c)" class="btn-delete">刪除</button>
+        </div>
+      </ng-container>
+
+    </div>
+  </div>
+</div>

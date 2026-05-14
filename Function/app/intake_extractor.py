@@ -11,6 +11,7 @@ import asyncio
 from google import genai
 
 from app.db import get_conn
+from app.rag_retriever import retrieve_relevant_chunks, format_rag_context
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemma-3-27b-it")
@@ -116,7 +117,7 @@ def _validate_intent(data: dict) -> dict:
     return data
 
 
-async def _call_google(messages_text: str) -> dict | None:
+async def _call_google(messages_text: str, rag_context: str = "") -> dict | None:
     """呼叫 Google Gemini / Gemma API 萃取欄位，回傳 dict 或 None（失敗時）
     503 / 429 自動 retry，最多 3 次，間隔 5 → 15 → 30 秒
     """
@@ -124,10 +125,12 @@ async def _call_google(messages_text: str) -> dict | None:
         print("[intake] GOOGLE_API_KEY 未設定，跳過萃取")
         return None
 
+    rag_section = f"\n\n{rag_context}\n" if rag_context else ""
     prompt = (
         f"{_SYSTEM}\n\n"
-        f"欄位定義：\n{_FIELD_DESC}\n\n"
-        f"對話內容：\n{messages_text}"
+        f"欄位定義：\n{_FIELD_DESC}\n"
+        f"{rag_section}"
+        f"\n對話內容：\n{messages_text}"
     )
 
     client  = genai.Client(api_key=GOOGLE_API_KEY)
@@ -161,10 +164,19 @@ async def _call_google(messages_text: str) -> dict | None:
     return None
 
 
-async def _upsert_intake(conn, conversation_id: int, ticket_id: int, data: dict):
+async def _upsert_intake(
+    conn,
+    conversation_id: int,
+    ticket_id: int,
+    data: dict,
+    rag_sources: list[dict] | None = None,
+):
     """將萃取結果寫入 conversation_intakes（已有欄位不覆蓋，逐步累積；意圖與建議回覆永遠更新）"""
     data         = _validate_intent(data)
     completeness = _calc_completeness(data)
+    rag_json     = json.dumps(
+        [{"id": c["id"], "title": c["title"], "score": c["score"]} for c in (rag_sources or [])]
+    )
 
     async with conn.cursor() as cur:
         await cur.execute(
@@ -174,9 +186,9 @@ async def _upsert_intake(conn, conversation_id: int, ticket_id: int, data: dict)
                customer_name, phone, course_type, preferred_date,
                group_size, experience_level, notes, suggested_reply,
                intent, intent_confidence,
-               completeness, created_at, updated_at)
+               completeness, rag_sources, created_at, updated_at)
             VALUES
-              (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+              (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
               ticket_id           = VALUES(ticket_id),
               customer_name       = COALESCE(VALUES(customer_name),    customer_name),
@@ -190,6 +202,7 @@ async def _upsert_intake(conn, conversation_id: int, ticket_id: int, data: dict)
               intent              = VALUES(intent),
               intent_confidence   = VALUES(intent_confidence),
               completeness        = GREATEST(completeness, VALUES(completeness)),
+              rag_sources         = VALUES(rag_sources),
               updated_at          = NOW()
             """,
             (
@@ -199,7 +212,7 @@ async def _upsert_intake(conn, conversation_id: int, ticket_id: int, data: dict)
                 data.get("group_size"),    data.get("experience_level"),
                 data.get("notes"),         data.get("suggested_reply"),
                 data.get("intent"),        data.get("intent_confidence"),
-                completeness,
+                completeness,             rag_json,
             ),
         )
     await conn.commit()
@@ -207,7 +220,7 @@ async def _upsert_intake(conn, conversation_id: int, ticket_id: int, data: dict)
 
 async def run_intake_extraction(conversation_id: int, ticket_id: int):
     """
-    背景執行入口：取對話 → 呼叫 Google AI → 寫入 DB
+    背景執行入口：取對話 → RAG 召回 → 呼叫 Google AI → 寫入 DB
     由 routes_callback._handle_event 以 asyncio.create_task 呼叫
     """
     try:
@@ -217,12 +230,16 @@ async def run_intake_extraction(conversation_id: int, ticket_id: int):
                 return
 
             messages_text = _format_messages(rows)
-            data = await _call_google(messages_text)
+
+            rag_chunks  = await retrieve_relevant_chunks(conn, messages_text)
+            rag_context = format_rag_context(rag_chunks)
+
+            data = await _call_google(messages_text, rag_context=rag_context)
             if not data:
                 return
 
             data = _validate_intent(data)
-            await _upsert_intake(conn, conversation_id, ticket_id, data)
+            await _upsert_intake(conn, conversation_id, ticket_id, data, rag_sources=rag_chunks)
 
             intent_label = _INTENT_LABEL.get(data.get("intent", ""), data.get("intent", ""))
             print(

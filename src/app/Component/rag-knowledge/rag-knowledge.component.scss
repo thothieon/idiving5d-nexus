@@ -1,0 +1,221 @@
+.rag-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  color: #e0e0e0;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+
+  h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #fff;
+    flex: 1;
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cat-filter {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+
+.btn-add, .btn-reembed {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.btn-add     { background: #1976d2; color: #fff; }
+.btn-reembed { background: #37474f; color: #cfd8dc; }
+
+.msg-bar {
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+
+  &.success { background: #1b5e20; color: #a5d6a7; }
+  &.error   { background: #4a1010; color: #ef9a9a; }
+}
+
+/* ── 新增 / 編輯 表單 ── */
+.add-form {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 20px;
+
+  h3 {
+    margin: 0 0 14px;
+    font-size: 1rem;
+    color: #90caf9;
+  }
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+
+  &.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  label { font-size: 0.8rem; color: #9e9e9e; }
+
+  input[type="text"],
+  input:not([type="checkbox"]),
+  select,
+  textarea {
+    background: #2c2c2c;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    resize: vertical;
+    font-family: inherit;
+
+    &:focus { outline: none; border-color: #1976d2; }
+  }
+
+  textarea { min-height: 100px; }
+}
+
+.form-error {
+  color: #ef9a9a;
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-save   { background: #1976d2; color: #fff;    border: none; border-radius: 6px; padding: 6px 16px; cursor: pointer; &:disabled { opacity: 0.5; } }
+.btn-cancel { background: #424242; color: #ccc;    border: none; border-radius: 6px; padding: 6px 16px; cursor: pointer; }
+
+/* ── 知識片段卡片 ── */
+.loading-hint {
+  color: #9e9e9e;
+  text-align: center;
+  padding: 32px;
+}
+
+.chunk-empty {
+  color: #666;
+  text-align: center;
+  padding: 40px;
+}
+
+.chunk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chunk-card {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 14px 16px;
+
+  &.inactive { opacity: 0.5; }
+}
+
+.chunk-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.chunk-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  flex: 1;
+}
+
+.cat-badge {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cat-faq     { background: #1565c0; color: #bbdefb; }
+.cat-course  { background: #1b5e20; color: #c8e6c9; }
+.cat-policy  { background: #e65100; color: #ffe0b2; }
+.cat-general { background: #37474f; color: #cfd8dc; }
+
+.emb-badge {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #263238;
+  color: #80cbc4;
+
+  &.no-emb { color: #ef9a9a; }
+}
+
+.inactive-tag {
+  font-size: 0.72rem;
+  background: #4a1010;
+  color: #ef9a9a;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.chunk-content {
+  font-size: 0.85rem;
+  color: #bdbdbd;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.chunk-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-edit, .btn-toggle, .btn-delete {
+  font-size: 0.8rem;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-edit   { background: #1976d2; color: #fff; }
+.btn-toggle { background: #37474f; color: #cfd8dc; }
+.btn-delete { background: #b71c1c; color: #fff; }

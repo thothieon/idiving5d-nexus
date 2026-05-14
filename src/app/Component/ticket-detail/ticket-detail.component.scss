@@ -335,7 +335,7 @@
   top:            0;
   right:          0;
   bottom:         0;
-  width:          280px;
+  width:          380px;
   @include glass;
   border-left:    1px solid $dark-border;
   z-index:        30;
@@ -345,6 +345,10 @@
   transition:     transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 
   &.open { transform: translateX(0); }
+
+  @media (max-width: 480px) {
+    width: 100vw;
+  }
 }
 
 .drawer-header {
@@ -1088,6 +1092,39 @@
   }
 }
 
+.rag-sources {
+  margin-top: 12px;
+  background: rgba(25, 118, 210, 0.08);
+  border: 1px solid rgba(25, 118, 210, 0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.rag-sources-label {
+  font-size: 11px;
+  color: #90caf9;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rag-source-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.rag-source-title {
+  font-size: 12px;
+  color: #bdbdbd;
+}
+
+.rag-source-score {
+  font-size: 11px;
+  color: #64b5f6;
+  font-weight: 600;
+}
+
 .intake-updated {
   margin-top: 14px;
   font-size:  11px;
@@ -1153,4 +1190,183 @@
   transition:    background 0.15s;
 
   &:hover { background: #0D47A1; }
+}
+
+// ── 待辦 Tab（方案 A）─────────────────────────────────────────
+.todo-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.todo-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #1a1d28;
+  border: 1px solid #2e3245;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.todo-add-input {
+  background: #252836;
+  border: 1px solid #3a3d50;
+  border-radius: 6px;
+  color: #e8eaf0;
+  padding: 7px 10px;
+  font-size: 0.88rem;
+  outline: none;
+  &:focus { border-color: #3a7bd5; }
+}
+
+.todo-add-note {
+  background: #252836;
+  border: 1px solid #3a3d50;
+  border-radius: 6px;
+  color: #e8eaf0;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  outline: none;
+  resize: vertical;
+  &:focus { border-color: #3a7bd5; }
+}
+
+.todo-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.todo-priority-sel {
+  flex: 1;
+  background: #252836;
+  border: 1px solid #3a3d50;
+  border-radius: 6px;
+  color: #e8eaf0;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  outline: none;
+  option { background: #252836; }
+}
+
+.todo-add-btn {
+  padding: 6px 14px;
+  background: #3a7bd5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { background: #2e64b8; }
+  &:disabled { opacity: 0.55; cursor: default; }
+}
+
+.todo-add-err {
+  color: #ef9a9a;
+  font-size: 0.8rem;
+}
+
+.todo-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #78819a;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  input[type="checkbox"] { cursor: pointer; }
+}
+
+.todo-count { color: #5a6070; font-size: 0.76rem; }
+
+.todo-loading { color: #5a6070; font-size: 0.84rem; }
+
+// ── Todo item in drawer ──────────────────────────────────────
+.ticket-todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #1a1d28;
+  border: 1px solid #2a2e40;
+  border-radius: 8px;
+  padding: 9px 10px;
+  transition: border-color 0.12s;
+
+  &:hover { border-color: #3a7bd5; }
+  &.done  { opacity: 0.5; }
+  &.overdue { border-left: 3px solid #e53935; }
+}
+
+.t-check {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.t-body { flex: 1; min-width: 0; }
+
+.t-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.t-priority {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 12px;
+
+  &.p-normal    { background: rgba(66,165,245,.15); color: #42a5f5; }
+  &.p-important { background: rgba(255,167,38,.15); color: #ffa726; }
+  &.p-urgent    { background: rgba(229,57,53,.18);  color: #ef5350; }
+}
+
+.t-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #dde1ec;
+  &.done-text { text-decoration: line-through; color: #5a6070; }
+}
+
+.t-note {
+  font-size: 0.78rem;
+  color: #6a7288;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+
+.t-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: #5a6480;
+  flex-wrap: wrap;
+  .overdue-text { color: #ef9a9a; }
+}
+
+.t-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.35;
+  padding: 0 2px;
+  flex-shrink: 0;
+  &:hover { opacity: 0.85; }
 }

@@ -26,6 +26,7 @@ export class App implements OnInit {
   isLiff    = signal(false);
 
   canRegistration = computed(() => this.tokenSvc.can('can_registration'));
+  canCustomers    = computed(() => this.tokenSvc.can('can_customers'));
   canCourses      = computed(() => this.tokenSvc.can('can_courses'));
   canPagestats    = computed(() => this.tokenSvc.can('can_pagestats'));
   canLinestats    = computed(() => this.tokenSvc.can('can_linestats'));

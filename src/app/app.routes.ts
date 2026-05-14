@@ -9,8 +9,10 @@ import { StaffManagementComponent } from './Component/staff-management/staff-man
 import { QuestionsStatsComponent } from './Component/questions-stats/questions-stats.component';
 import { CourseScheduleComponent } from './Component/course-schedule/course-schedule.component';
 import { RegistrationComponent } from './Component/registration/registration.component';
+import { CustomerManagementComponent } from './Component/customer-management/customer-management.component';
 import { PageStatsComponent } from './Component/page-stats/page-stats.component';
 import { LineStatsComponent } from './Component/line-stats/line-stats.component';
+import { RagKnowledgeComponent } from './Component/rag-knowledge/rag-knowledge.component';
 import { adminRoleGuard } from './Service/auth/admin-role.guard';
 import { permissionGuard } from './Service/auth/permission.guard';
 
@@ -26,8 +28,10 @@ export const routes: Routes = [
   { path: 'admin/questions',    component: QuestionsStatsComponent,   canActivate: [permissionGuard('can_questions')] },
   { path: 'admin/courses',      component: CourseScheduleComponent,   canActivate: [permissionGuard('can_courses')] },
   { path: 'admin/registration', component: RegistrationComponent,     canActivate: [permissionGuard('can_registration')] },
+  { path: 'admin/customers',   component: CustomerManagementComponent, canActivate: [permissionGuard('can_customers')] },
   { path: 'admin/pagestats',    component: PageStatsComponent,        canActivate: [permissionGuard('can_pagestats')] },
   { path: 'admin/linestats',    component: LineStatsComponent,        canActivate: [permissionGuard('can_linestats')] },
+  { path: 'admin/rag',          component: RagKnowledgeComponent,     canActivate: [adminRoleGuard] },
 
   // LIFF（不需要 admin 登入）
   { path: 'liff/payment', component: LiffPaymentComponent },

@@ -3,14 +3,14 @@
 # 每日 AI 摘要報告
 #
 # 每天 22:00（Asia/Taipei）自動執行：
-#   1. 查詢今日統計數字（訊息、工單、意圖、超時）
-#   2. 請 Gemini 生成自然語言摘要
-#   3. 用 LINE push 推播給管理者（LINE_NOTIFY_TO_ID）
+#   1. 查詢今日統計數字（訊息、工單、意圖、超時等）
+#   2. 組合結構化分類報告（_build_report）
+#   3. 請 Gemini 附加一行 AI 觀察（可選）
+#   4. 用 LINE push 推播給管理者（LINE_NOTIFY_TO_ID）
 #
 # 也提供手動觸發：POST /admin/api/stats/line/daily_report
 # ================================================================
 import os
-import json
 import asyncio
 import datetime
 import zoneinfo
@@ -25,6 +25,14 @@ LINE_NOTIFY_TO = os.environ.get("LINE_NOTIFY_TO_ID", "")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 TZ             = zoneinfo.ZoneInfo("Asia/Taipei")
+
+INTENT_LABELS = {
+    "course_inquiry": "詢問課程",
+    "booking":        "要報名",
+    "payment":        "繳費相關",
+    "complaint":      "抱怨反映",
+    "general":        "一般閒聊",
+}
 
 
 # ── 資料查詢 ────────────────────────────────────────────────────
@@ -44,28 +52,80 @@ async def _fetch_today_stats() -> dict:
             """)
             msg = await cur.fetchone()
 
-            # 今日新工單 / 目前 open 工單
+            # 今日尖峰時段（客人傳入訊息最多的小時）
+            await cur.execute("""
+                SELECT HOUR(created_at) AS hr, COUNT(*) AS cnt
+                FROM messages_raw
+                WHERE DATE(created_at) = CURDATE() AND direction='in'
+                GROUP BY hr
+                ORDER BY cnt DESC
+                LIMIT 1
+            """)
+            peak = await cur.fetchone()
+
+            # 今日新工單 / 今日結案 / 目前狀態
             await cur.execute("""
                 SELECT
-                  SUM(DATE(created_at) = CURDATE()) AS today_new,
-                  SUM(current_status = 'open')      AS open_cnt,
-                  SUM(current_status = 'pending')   AS pending_cnt
+                  SUM(DATE(created_at) = CURDATE())  AS today_new,
+                  SUM(DATE(closed_at)  = CURDATE())  AS today_closed,
+                  SUM(current_status = 'open')        AS open_cnt,
+                  SUM(current_status = 'pending')     AS pending_cnt
                 FROM tickets
             """)
             tk = await cur.fetchone()
 
-            # 超時工單（open 且最後客人訊息距今 > 60 分鐘）
+            # 今日各客服回覆則數
+            await cur.execute("""
+                SELECT sender_name AS name, COUNT(*) AS cnt
+                FROM messages_raw
+                WHERE DATE(created_at) = CURDATE()
+                  AND direction='out' AND sender_type='staff'
+                GROUP BY sender_name
+                ORDER BY cnt DESC
+                LIMIT 8
+            """)
+            staff_rows = await cur.fetchall()
+
+            # 今日新客數（對話首次開工單）
             await cur.execute("""
                 SELECT COUNT(*) AS cnt
                 FROM tickets t
-                WHERE t.current_status = 'open'
-                  AND EXISTS (
-                    SELECT 1 FROM messages_raw m
-                    WHERE m.ticket_id = t.id AND m.direction = 'in'
-                    HAVING MAX(m.created_at) < DATE_SUB(NOW(), INTERVAL 60 MINUTE)
+                WHERE DATE(t.created_at) = CURDATE()
+                  AND NOT EXISTS (
+                    SELECT 1 FROM tickets t2
+                    WHERE t2.conversation_id = t.conversation_id
+                      AND t2.id < t.id
                   )
             """)
-            overdue = (await cur.fetchone())["cnt"]
+            new_cust = await cur.fetchone()
+
+            # 超時工單列表（open 且最後客人訊息距今 > 60 分，附等待分鐘數）
+            await cur.execute("""
+                SELECT t.id,
+                       COALESCE(
+                           cu_direct.customer_name,
+                           cu_sender.customer_name,
+                           cu_direct.display_name,
+                           cu_sender.display_name,
+                           '未知'
+                       ) AS name,
+                       TIMESTAMPDIFF(MINUTE,
+                           (SELECT MAX(m.created_at) FROM messages_raw m
+                            WHERE m.ticket_id = t.id AND m.direction='in'),
+                           NOW()
+                       ) AS wait_minutes
+                FROM tickets t
+                JOIN conversations cv ON cv.id = t.conversation_id
+                LEFT JOIN customers cu_direct
+                    ON cu_direct.line_user_id = cv.channel_id AND cv.channel_type = 'user'
+                LEFT JOIN customers cu_sender
+                    ON cu_sender.line_user_id = cv.channel_id AND cv.channel_type IN ('group','room')
+                WHERE t.current_status = 'open'
+                HAVING wait_minutes > 60
+                ORDER BY wait_minutes DESC
+                LIMIT 5
+            """)
+            overdue_rows = await cur.fetchall()
 
             # 今日意圖分佈（前 5）
             await cur.execute("""
@@ -90,7 +150,7 @@ async def _fetch_today_stats() -> dict:
             """)
             courses = await cur.fetchall()
 
-            # 近 7 天未結案（開最久的 3 張）
+            # 最久未結案（前 3 張，附等待天數）
             await cur.execute("""
                 SELECT t.id, t.current_status,
                        COALESCE(
@@ -100,7 +160,7 @@ async def _fetch_today_stats() -> dict:
                            cu_sender.display_name,
                            '未知'
                        ) AS name,
-                       t.opened_at
+                       DATEDIFF(NOW(), t.opened_at) AS wait_days
                 FROM tickets t
                 JOIN conversations cv ON cv.id = t.conversation_id
                 LEFT JOIN customers cu_direct
@@ -113,96 +173,121 @@ async def _fetch_today_stats() -> dict:
             """)
             oldest = await cur.fetchall()
 
-    intent_labels = {
-        "course_inquiry": "詢問課程",
-        "booking":        "要報名",
-        "payment":        "繳費相關",
-        "complaint":      "抱怨反映",
-        "general":        "一般閒聊",
-    }
-
     return {
-        "msgs_in":   int(msg["msgs_in"]   or 0),
-        "msgs_out":  int(msg["msgs_out"]  or 0),
-        "today_new": int(tk["today_new"]  or 0),
-        "open_cnt":  int(tk["open_cnt"]   or 0),
-        "pending_cnt": int(tk["pending_cnt"] or 0),
-        "overdue_cnt": int(overdue         or 0),
-        "intents":   [{"label": intent_labels.get(r["intent"], r["intent"]), "cnt": r["cnt"]}
-                      for r in intents],
-        "courses":   [{"course_type": r["course_type"], "cnt": r["cnt"]} for r in courses],
+        "msgs_in":       int(msg["msgs_in"]     or 0),
+        "msgs_out":      int(msg["msgs_out"]    or 0),
+        "peak_hour":     int(peak["hr"])         if peak else None,
+        "peak_hour_cnt": int(peak["cnt"])        if peak else 0,
+        "today_new":     int(tk["today_new"]    or 0),
+        "today_closed":  int(tk["today_closed"] or 0),
+        "open_cnt":      int(tk["open_cnt"]     or 0),
+        "pending_cnt":   int(tk["pending_cnt"]  or 0),
+        "new_customers": int(new_cust["cnt"]    or 0),
+        "staff_replies": [{"name": r["name"], "cnt": int(r["cnt"])} for r in staff_rows],
+        "overdue_tickets": [
+            {"id": r["id"], "name": r["name"], "wait_minutes": int(r["wait_minutes"] or 0)}
+            for r in overdue_rows
+        ],
+        "intents": [
+            {"label": INTENT_LABELS.get(r["intent"], r["intent"]), "cnt": int(r["cnt"])}
+            for r in intents
+        ],
+        "courses":  [{"course_type": r["course_type"], "cnt": int(r["cnt"])} for r in courses],
         "oldest_tickets": [
             {"id": r["id"], "name": r["name"], "status": r["current_status"],
-             "opened_at": str(r["opened_at"] or "")}
+             "wait_days": int(r["wait_days"] or 0)}
             for r in oldest
         ],
     }
 
 
-# ── AI 摘要生成 ──────────────────────────────────────────────────
+# ── 結構化報告組合 ───────────────────────────────────────────────
 
-async def _generate_summary(stats: dict) -> str:
-    """請 Gemini 根據數據生成自然語言摘要，失敗則回傳純文字版本"""
+def _build_report(stats: dict) -> str:
+    today = datetime.date.today().strftime("%Y/%m/%d")
+    SEP   = "─" * 22
+    lines = [f"📊 iDiving 每日客服摘要 {today}", SEP]
+
+    # 📨 訊息流量
+    reply_rate = round(stats["msgs_out"] / stats["msgs_in"] * 100) if stats["msgs_in"] else 0
+    lines.append("📨 訊息流量")
+    flow = f"  收到 {stats['msgs_in']} 則｜回覆 {stats['msgs_out']} 則｜回覆率 {reply_rate}%"
+    if stats["peak_hour"] is not None:
+        flow += f"\n  尖峰：{stats['peak_hour']:02d}:00（{stats['peak_hour_cnt']} 則）"
+    lines.append(flow)
+
+    # 🎫 工單概況
+    lines.append("🎫 工單概況")
+    lines.append(f"  今日新開 {stats['today_new']} 張｜今日結案 {stats['today_closed']} 張")
+    lines.append(f"  open {stats['open_cnt']} 張｜pending {stats['pending_cnt']} 張")
+
+    # 👥 客服出勤
+    if stats["staff_replies"]:
+        lines.append("👥 客服出勤")
+        lines.append("  " + "｜".join(f"{s['name']} {s['cnt']}則" for s in stats["staff_replies"]))
+        if stats["new_customers"]:
+            lines.append(f"  新客戶 {stats['new_customers']} 位初次來訊")
+
+    # ⚠️ 超時未回
+    if stats["overdue_tickets"]:
+        lines.append(f"⚠️ 超時未回（>60分）{len(stats['overdue_tickets'])} 張")
+        for t in stats["overdue_tickets"]:
+            h = t["wait_minutes"] / 60
+            lines.append(f"  · #{t['id']} {t['name']}｜等待 {h:.1f} 小時")
+
+    # 🔍 今日詢問主題
+    if stats["intents"]:
+        lines.append("🔍 今日詢問主題")
+        lines.append("  " + "｜".join(f"{i['label']} ×{i['cnt']}" for i in stats["intents"]))
+
+    # 🤿 近 7 日熱門課程
+    if stats["courses"]:
+        lines.append("🤿 近 7 日熱門課程")
+        lines.append("  " + "｜".join(f"{c['course_type']} ×{c['cnt']}" for c in stats["courses"]))
+
+    # 📌 最久未結案
+    if stats["oldest_tickets"]:
+        lines.append("📌 最久未結案")
+        for t in stats["oldest_tickets"]:
+            lines.append(f"  · #{t['id']} {t['name']}（{t['status']}）等待 {t['wait_days']} 天")
+
+    return "\n".join(lines)
+
+
+# ── AI 一行觀察 ──────────────────────────────────────────────────
+
+async def _ai_insight(stats: dict) -> str:
+    """請 Gemini 根據數據生成一行觀察，失敗則回傳空字串"""
     if not GOOGLE_API_KEY:
-        return _fallback_text(stats)
+        return ""
 
-    intent_str  = "、".join(f"{i['label']}×{i['cnt']}" for i in stats["intents"]) or "（無）"
-    course_str  = "、".join(f"{c['course_type']}×{c['cnt']}" for c in stats["courses"]) or "（無）"
-    oldest_str  = "\n".join(
-        f"  - #{t['id']} {t['name']}（{t['status']}）開單：{t['opened_at'][:10]}"
-        for t in stats["oldest_tickets"]
-    ) or "  - 無"
+    parts = []
+    if stats["overdue_tickets"]:
+        parts.append(f"超時工單 {len(stats['overdue_tickets'])} 張")
+    if stats["intents"]:
+        top = stats["intents"][0]
+        parts.append(f"主要詢問：{top['label']}×{top['cnt']}")
+    if stats["courses"]:
+        top = stats["courses"][0]
+        parts.append(f"熱門課程：{top['course_type']}×{top['cnt']}")
+    reply_rate = round(stats["msgs_out"] / stats["msgs_in"] * 100) if stats["msgs_in"] else 0
+    parts.append(f"回覆率 {reply_rate}%")
 
     prompt = (
-        "你是 iDiving 潛水中心客服系統的 AI 助手。"
-        "根據以下今日統計數字，用繁體中文撰寫一份簡短的每日摘要（150字以內），"
-        "語氣親切、重點明確，最後若有超時工單或大量投訴則提醒客服注意。\n\n"
-        f"【今日數據 - {datetime.date.today().strftime('%Y/%m/%d')}】\n"
-        f"客人傳入訊息：{stats['msgs_in']} 則\n"
-        f"客服回覆：{stats['msgs_out']} 則\n"
-        f"今日新工單：{stats['today_new']} 張\n"
-        f"目前 open（待回覆）：{stats['open_cnt']} 張\n"
-        f"目前 pending（等客人）：{stats['pending_cnt']} 張\n"
-        f"超時未回（>60分鐘）：{stats['overdue_cnt']} 張\n"
-        f"今日意圖分佈：{intent_str}\n"
-        f"近7日熱門課程：{course_str}\n"
-        f"最久未結案工單：\n{oldest_str}\n\n"
-        "請只輸出摘要文字，不要標題、不要 JSON。"
+        "你是 iDiving 潛水中心客服系統 AI。"
+        f"今日數據：{'、'.join(parts)}。"
+        "請用繁體中文寫一句話（40字以內）的觀察或行動建議，語氣簡潔直接，不要任何前綴符號。"
     )
-
     try:
         client = genai.Client(api_key=GOOGLE_API_KEY)
         resp   = await client.aio.models.generate_content(
             model=GEMINI_MODEL, contents=prompt
         )
-        text = (resp.text or "").strip()
-        if text:
-            return text
+        text = (resp.text or "").strip().splitlines()[0]
+        return f"🤖 {text}" if text else ""
     except Exception as e:
-        print(f"[daily_report] Gemini 生成摘要失敗，改用純文字版本: {e}")
-
-    return _fallback_text(stats)
-
-
-def _fallback_text(stats: dict) -> str:
-    """Gemini 失敗時的純文字備用摘要"""
-    today = datetime.date.today().strftime("%Y/%m/%d")
-    lines = [
-        f"📊 iDiving 每日客服摘要 {today}",
-        f"",
-        f"📨 今日訊息：客人 {stats['msgs_in']} 則 / 客服 {stats['msgs_out']} 則",
-        f"🎫 今日新工單：{stats['today_new']} 張",
-        f"📋 待處理：open {stats['open_cnt']}張 / pending {stats['pending_cnt']}張",
-    ]
-    if stats["overdue_cnt"]:
-        lines.append(f"⚠️ 超時未回（>60分）：{stats['overdue_cnt']} 張，請盡快處理！")
-    if stats["intents"]:
-        intent_str = "、".join(f"{i['label']} {i['cnt']}次" for i in stats["intents"])
-        lines.append(f"🤖 今日意圖：{intent_str}")
-    if stats["courses"]:
-        course_str = "、".join(f"{c['course_type']} {c['cnt']}次" for c in stats["courses"])
-        lines.append(f"🤿 熱門詢問：{course_str}")
-    return "\n".join(lines)
+        print(f"[daily_report] Gemini AI 觀察失敗: {e}")
+        return ""
 
 
 # ── LINE 推播 ────────────────────────────────────────────────────
@@ -235,14 +320,15 @@ async def _push_line(text: str):
 # ── 主入口 ──────────────────────────────────────────────────────
 
 async def run_daily_report():
-    """查詢數據 → 生成摘要 → LINE 推播"""
+    """查詢數據 → 組合報告 → AI 觀察 → LINE 推播"""
     print("[daily_report] 開始生成每日摘要…")
     try:
         stats   = await _fetch_today_stats()
-        summary = await _generate_summary(stats)
-        msg     = f"📊 iDiving 每日客服摘要\n{'─'*20}\n{summary}"
+        report  = _build_report(stats)
+        insight = await _ai_insight(stats)
+        msg     = report + (f"\n{insight}" if insight else "")
         await _push_line(msg)
-        print(f"[daily_report] 完成，摘要長度={len(summary)}")
+        print(f"[daily_report] 完成，報告長度={len(msg)}")
     except Exception as e:
         print(f"[daily_report] 執行失敗: {e}")
 

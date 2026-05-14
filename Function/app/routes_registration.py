@@ -17,6 +17,7 @@
 #   PUT  /admin/api/reg/sessions/{id}        修改梯次
 # ============================================================
 import io
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -111,6 +112,7 @@ class RegistrationCreate(BaseModel):
     customer_id: Optional[int] = None   # 已查到既有客戶
     customer:    Optional[CustomerCreate] = None  # 新客戶資料
     notes:       Optional[str] = None
+    health_form: Optional[dict] = None  # 健康申明答案
 
 
 class RegistrationStatusUpdate(BaseModel):
@@ -215,23 +217,29 @@ async def list_sessions(course_id: int):
 
 @public_router.post("/reg/customers/lookup")
 async def lookup_customer(body: CustomerLookup):
-    """依 MID 或 姓名+身分證 查詢既有客戶，找到回傳資料，找不到回傳 null"""
+    """依 MID 或 身分證字號 查詢既有客戶，找到回傳完整資料，找不到回傳 null"""
     async with get_conn() as conn:
         async with conn.cursor() as cur:
             if body.mid:
                 await cur.execute(
-                    "SELECT id, name, id_number, phone, email, mid "
+                    "SELECT id, name, id_number, mobile_phone AS phone, home_phone, email, mid, "
+                    "nickname, name_en, birth_date, nationality, blood_type, address, "
+                    "emergency_contact, emergency_phone, height, weight, shoe_size, "
+                    "vision_left, vision_right "
                     "FROM reg_customers WHERE mid=%s LIMIT 1",
                     (body.mid,)
                 )
-            elif body.name and body.id_number:
+            elif body.id_number:
                 await cur.execute(
-                    "SELECT id, name, id_number, phone, email, mid "
-                    "FROM reg_customers WHERE name=%s AND id_number=%s LIMIT 1",
-                    (body.name, body.id_number)
+                    "SELECT id, name, id_number, mobile_phone AS phone, home_phone, email, mid, "
+                    "nickname, name_en, birth_date, nationality, blood_type, address, "
+                    "emergency_contact, emergency_phone, height, weight, shoe_size, "
+                    "vision_left, vision_right "
+                    "FROM reg_customers WHERE id_number=%s LIMIT 1",
+                    (body.id_number,)
                 )
             else:
-                raise HTTPException(400, "請提供 mid 或 name+id_number")
+                raise HTTPException(400, "請提供 mid 或 id_number")
 
             row = await cur.fetchone()
     return dict(row) if row else None
@@ -297,31 +305,31 @@ async def create_registration(body: RegistrationCreate):
                 if existing:
                     customer_id = existing['id']
                     await cur.execute(
-                        "UPDATE reg_customers SET name=%s, phone=%s, home_phone=%s, email=%s, mid=%s, "
+                        "UPDATE reg_customers SET name=%s, mobile_phone=%s, home_phone=%s, email=%s, mid=%s, "
                         "nickname=%s, name_en=%s, birth_date=%s, nationality=%s, blood_type=%s, "
                         "address=%s, emergency_contact=%s, emergency_phone=%s, "
-                        "height=%s, weight=%s, vision_left=%s, vision_right=%s, "
+                        "height=%s, weight=%s, shoe_size=%s, vision_left=%s, vision_right=%s, "
                         "payment_date=%s, membership_expiry=%s, updated_at=NOW() "
                         "WHERE id=%s",
                         (c.name, c.phone, c.home_phone, c.email, c.mid,
                          c.nickname, c.name_en, c.birth_date, c.nationality, c.blood_type,
                          c.address, c.emergency_contact, c.emergency_phone,
-                         c.height, c.weight, c.vision_left, c.vision_right,
+                         c.height, c.weight, c.shoe_size, c.vision_left, c.vision_right,
                          c.payment_date, c.membership_expiry, customer_id)
                     )
                 else:
                     await cur.execute(
                         "INSERT INTO reg_customers "
-                        "(name, id_number, phone, home_phone, email, mid, "
+                        "(name, id_number, mobile_phone, home_phone, email, mid, "
                         " nickname, name_en, birth_date, nationality, blood_type, "
                         " address, emergency_contact, emergency_phone, "
-                        " height, weight, vision_left, vision_right, "
+                        " height, weight, shoe_size, vision_left, vision_right, "
                         " payment_date, membership_expiry) "
-                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         (c.name, c.id_number, c.phone, c.home_phone, c.email, c.mid,
                          c.nickname, c.name_en, c.birth_date, c.nationality, c.blood_type,
                          c.address, c.emergency_contact, c.emergency_phone,
-                         c.height, c.weight, c.vision_left, c.vision_right,
+                         c.height, c.weight, c.shoe_size, c.vision_left, c.vision_right,
                          c.payment_date, c.membership_expiry)
                     )
                     customer_id = cur.lastrowid
@@ -344,11 +352,12 @@ async def create_registration(body: RegistrationCreate):
                 reg_status        = 'waitlist'
                 waitlist_position = waitlist_count + 1
 
+            health_json = json.dumps(body.health_form, ensure_ascii=False) if body.health_form else None
             await cur.execute(
                 "INSERT INTO registrations "
-                "(session_id, customer_id, reg_status, waitlist_position, notes) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (body.session_id, customer_id, reg_status, waitlist_position, body.notes)
+                "(session_id, customer_id, reg_status, waitlist_position, notes, health_form) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (body.session_id, customer_id, reg_status, waitlist_position, body.notes, health_json)
             )
             reg_id = cur.lastrowid
 
@@ -376,14 +385,16 @@ async def admin_list_registrations(
             sql = """
                 SELECT
                     r.id, r.reg_status, r.payment_status,
-                    r.waitlist_position, r.notes,
+                    r.waitlist_position, r.notes, r.health_form,
                     r.registered_at, r.confirmed_at,
+                    r.transfer_bank, r.transfer_date, r.transfer_note,
+                    r.payment_submitted_at,
                     c.id AS customer_id,
                     c.name, c.id_number,
-                    c.phone, c.home_phone, c.email, c.mid,
+                    c.mobile_phone AS phone, c.home_phone, c.email, c.mid,
                     c.nickname, c.name_en, c.birth_date, c.nationality, c.blood_type,
                     c.address, c.emergency_contact, c.emergency_phone,
-                    c.height, c.weight, c.vision_left, c.vision_right,
+                    c.height, c.weight, c.shoe_size, c.vision_left, c.vision_right,
                     c.payment_date, c.membership_expiry,
                     s.label AS session_label, s.start_date, s.end_date,
                     co.title AS course_title, co.course_code
@@ -406,7 +417,17 @@ async def admin_list_registrations(
             sql += " ORDER BY r.registered_at DESC"
             await cur.execute(sql, params)
             rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+
+    result = []
+    for r in rows:
+        row = dict(r)
+        if isinstance(row.get('health_form'), str):
+            try:
+                row['health_form'] = json.loads(row['health_form'])
+            except Exception:
+                row['health_form'] = None
+        result.append(row)
+    return result
 
 
 # ── Admin: 更新報名狀態 ───────────────────────────────────────
@@ -512,10 +533,10 @@ async def admin_export_registrations(
                 SELECT
                     r.id, co.title AS course_title, s.label AS session_label,
                     s.start_date, s.end_date,
-                    c.name, c.id_number, c.phone, c.home_phone, c.email, c.mid,
+                    c.name, c.id_number, c.mobile_phone AS phone, c.home_phone, c.email, c.mid,
                     c.nickname, c.name_en, c.birth_date, c.nationality, c.blood_type,
                     c.address, c.emergency_contact, c.emergency_phone,
-                    c.height, c.weight, c.vision_left, c.vision_right,
+                    c.height, c.weight, c.shoe_size, c.vision_left, c.vision_right,
                     c.payment_date, c.membership_expiry,
                     r.reg_status, r.payment_status,
                     r.waitlist_position, r.registered_at, r.confirmed_at, r.notes
@@ -743,9 +764,11 @@ async def admin_update_customer(
             if not await cur.fetchone():
                 raise HTTPException(404, "客戶不存在")
 
+            FIELD_MAP = {"phone": "mobile_phone"}
             updates, params = [], []
             for field, val in body.model_dump(exclude_unset=True).items():
-                updates.append(f"{field}=%s")
+                col = FIELD_MAP.get(field, field)
+                updates.append(f"{col}=%s")
                 params.append(val)
             if not updates:
                 raise HTTPException(400, "沒有要更新的欄位")
@@ -757,3 +780,325 @@ async def admin_update_customer(
             )
         await conn.commit()
     return {"ok": True}
+
+
+# ── Admin: 確認報名資料 → 發付款 email ───────────────────────
+
+import secrets
+import asyncio
+from datetime import timedelta
+from app.email_service import send_payment_request, send_registration_complete, FRONTEND_URL
+
+@admin_router.post("/reg/registrations/{reg_id}/confirm-data")
+async def admin_confirm_data(
+    reg_id: int,
+    staff = Depends(get_current_staff),
+):
+    """員工確認客戶資料，產生付款 token 並發 email"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """SELECT r.id, r.reg_status,
+                          c.name, c.email,
+                          s.label AS session_label, s.start_date, s.end_date,
+                          co.title AS course_title
+                   FROM registrations r
+                   JOIN reg_customers c  ON c.id  = r.customer_id
+                   JOIN reg_sessions  s  ON s.id  = r.session_id
+                   JOIN reg_courses   co ON co.id = s.course_id
+                   WHERE r.id=%s""",
+                (reg_id,)
+            )
+            reg = await cur.fetchone()
+            if not reg:
+                raise HTTPException(404, "報名紀錄不存在")
+            if reg['reg_status'] not in ('pending', 'waitlist'):
+                raise HTTPException(409, f"目前狀態 {reg['reg_status']} 無法確認資料")
+            if not reg['email']:
+                raise HTTPException(400, "客戶未填寫 email，無法發送通知")
+
+            token   = secrets.token_urlsafe(32)
+            expires = datetime.now() + timedelta(days=7)
+
+            await cur.execute(
+                "UPDATE registrations SET reg_status='data_confirmed', "
+                "payment_token=%s, payment_token_expires_at=%s WHERE id=%s",
+                (token, expires, reg_id)
+            )
+        await conn.commit()
+
+    payment_url = f"{FRONTEND_URL}/#/payment/{token}"
+    expire_date = (datetime.now() + timedelta(days=7)).strftime("%Y/%m/%d")
+    asyncio.create_task(send_payment_request(
+        to_email=reg['email'], name=reg['name'],
+        course_title=reg['course_title'], session_label=reg['session_label'],
+        start_date=str(reg['start_date']), end_date=str(reg['end_date']),
+        payment_url=payment_url, expire_date=expire_date,
+    ))
+    return {"ok": True, "token": token}
+
+
+# ── Public: 取得付款頁面資訊（by token）────────────────────────
+
+@public_router.get("/reg/payment/{token}")
+async def get_payment_info(token: str):
+    """客人用 email 連結進入付款頁，取得報名資訊"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """SELECT r.id, r.reg_status, r.payment_token_expires_at,
+                          r.transfer_bank, r.transfer_date, r.transfer_note,
+                          c.name,
+                          s.label AS session_label, s.start_date, s.end_date,
+                          co.title AS course_title
+                   FROM registrations r
+                   JOIN reg_customers c  ON c.id  = r.customer_id
+                   JOIN reg_sessions  s  ON s.id  = r.session_id
+                   JOIN reg_courses   co ON co.id = s.course_id
+                   WHERE r.payment_token=%s""",
+                (token,)
+            )
+            reg = await cur.fetchone()
+    if not reg:
+        raise HTTPException(404, "連結無效")
+    if reg['reg_status'] == 'payment_submitted':
+        return {**dict(reg), "already_submitted": True}
+    if reg['reg_status'] != 'data_confirmed':
+        raise HTTPException(409, "此連結已失效或報名狀態不正確")
+    if reg['payment_token_expires_at'] and datetime.now() > reg['payment_token_expires_at']:
+        raise HTTPException(410, "此連結已過期，請聯繫店家重新取得")
+    return {**dict(reg), "already_submitted": False}
+
+
+# ── Public: 客人提交匯款資訊 ─────────────────────────────────
+
+class PaymentSubmit(BaseModel):
+    transfer_bank: str = Field(..., max_length=10, description="匯款帳號後5碼")
+    transfer_date: str
+    transfer_note: Optional[str] = Field(None, max_length=200)
+
+@public_router.post("/reg/payment/{token}")
+async def submit_payment(token: str, body: PaymentSubmit):
+    """客人填寫匯款資訊"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, reg_status, payment_token_expires_at "
+                "FROM registrations WHERE payment_token=%s",
+                (token,)
+            )
+            reg = await cur.fetchone()
+            if not reg:
+                raise HTTPException(404, "連結無效")
+            if reg['reg_status'] == 'payment_submitted':
+                raise HTTPException(409, "已提交過匯款資訊")
+            if reg['reg_status'] != 'data_confirmed':
+                raise HTTPException(409, "此連結狀態不正確")
+            if reg['payment_token_expires_at'] and datetime.now() > reg['payment_token_expires_at']:
+                raise HTTPException(410, "連結已過期")
+
+            await cur.execute(
+                "UPDATE registrations SET reg_status='payment_submitted', "
+                "transfer_bank=%s, transfer_date=%s, transfer_note=%s, "
+                "payment_submitted_at=NOW() WHERE id=%s",
+                (body.transfer_bank, body.transfer_date, body.transfer_note, reg['id'])
+            )
+        await conn.commit()
+    return {"ok": True}
+
+
+# ── Admin: 確認完成報名 → 發完成 email ───────────────────────
+
+@admin_router.post("/reg/registrations/{reg_id}/confirm-payment")
+async def admin_confirm_payment(
+    reg_id: int,
+    staff = Depends(get_current_staff),
+):
+    """員工確認匯款，標記報名完成並發 email"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """SELECT r.id, r.reg_status,
+                          c.name, c.email,
+                          s.label AS session_label, s.start_date, s.end_date,
+                          co.title AS course_title
+                   FROM registrations r
+                   JOIN reg_customers c  ON c.id  = r.customer_id
+                   JOIN reg_sessions  s  ON s.id  = r.session_id
+                   JOIN reg_courses   co ON co.id = s.course_id
+                   WHERE r.id=%s""",
+                (reg_id,)
+            )
+            reg = await cur.fetchone()
+            if not reg:
+                raise HTTPException(404, "報名紀錄不存在")
+            if reg['reg_status'] != 'payment_submitted':
+                raise HTTPException(409, f"目前狀態 {reg['reg_status']} 無法確認完成")
+
+            await cur.execute(
+                "UPDATE registrations SET reg_status='confirmed', confirmed_at=NOW() WHERE id=%s",
+                (reg_id,)
+            )
+        await conn.commit()
+
+    if reg['email']:
+        asyncio.create_task(send_registration_complete(
+            to_email=reg['email'], name=reg['name'],
+            course_title=reg['course_title'], session_label=reg['session_label'],
+            start_date=str(reg['start_date']), end_date=str(reg['end_date']),
+        ))
+    return {"ok": True}
+
+
+# ── Admin: 重發確認信 ──────────────────────────────────────────
+
+@admin_router.post("/reg/registrations/{reg_id}/resend-email")
+async def admin_resend_email(
+    reg_id: int,
+    staff = Depends(get_current_staff),
+):
+    """重發確認 email（付款通知 或 完成通知）"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """SELECT r.id, r.reg_status, r.payment_token, r.payment_token_expires_at,
+                          c.name, c.email,
+                          s.label AS session_label, s.start_date, s.end_date,
+                          co.title AS course_title
+                   FROM registrations r
+                   JOIN reg_customers c  ON c.id  = r.customer_id
+                   JOIN reg_sessions  s  ON s.id  = r.session_id
+                   JOIN reg_courses   co ON co.id = s.course_id
+                   WHERE r.id=%s""",
+                (reg_id,)
+            )
+            reg = await cur.fetchone()
+
+    if not reg:
+        raise HTTPException(404, "報名紀錄不存在")
+    if not reg['email']:
+        raise HTTPException(400, "客戶未填寫 email，無法發送通知")
+
+    status = reg['reg_status']
+
+    if status in ('data_confirmed', 'payment_submitted'):
+        # 重發付款通知信（延長 token 有效期至 7 天後）
+        token = reg['payment_token']
+        if not token:
+            raise HTTPException(409, "付款連結遺失，請重新執行「確認資料」流程")
+        new_expires = datetime.now() + timedelta(days=7)
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE registrations SET payment_token_expires_at=%s WHERE id=%s",
+                    (new_expires, reg_id)
+                )
+            await conn.commit()
+        payment_url = f"{FRONTEND_URL}/#/payment/{token}"
+        expire_date = new_expires.strftime("%Y/%m/%d")
+        asyncio.create_task(send_payment_request(
+            to_email=reg['email'], name=reg['name'],
+            course_title=reg['course_title'], session_label=reg['session_label'],
+            start_date=str(reg['start_date']), end_date=str(reg['end_date']),
+            payment_url=payment_url, expire_date=expire_date,
+        ))
+        return {"ok": True, "sent": "payment"}
+
+    if status == 'confirmed':
+        asyncio.create_task(send_registration_complete(
+            to_email=reg['email'], name=reg['name'],
+            course_title=reg['course_title'], session_label=reg['session_label'],
+            start_date=str(reg['start_date']), end_date=str(reg['end_date']),
+        ))
+        return {"ok": True, "sent": "complete"}
+
+    raise HTTPException(409, f"目前狀態 {status} 不支援重發確認信")
+
+
+# ── Admin: 客戶管理 ────────────────────────────────────────────
+
+@admin_router.get("/reg/customers")
+async def admin_list_customers(
+    q:      Optional[str] = None,   # 搜尋：姓名 / 電話 / 身分證
+    offset: int = 0,
+    limit:  int = 50,
+    staff = Depends(get_current_staff),
+):
+    """客戶列表（含報名次數統計）"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            where, params = "WHERE 1=1", []
+            if q:
+                where += " AND (c.name LIKE %s OR c.mobile_phone LIKE %s OR c.id_number LIKE %s)"
+                like = f"%{q}%"
+                params.extend([like, like, like])
+
+            await cur.execute(f"""
+                SELECT c.id, c.name, c.mobile_phone AS phone, c.email,
+                       c.id_number, c.mid, c.nickname,
+                       c.birth_date, c.membership_expiry,
+                       COUNT(r.id)                                              AS reg_count,
+                       SUM(r.reg_status = 'confirmed')                         AS confirmed_count,
+                       MAX(r.registered_at)                                    AS last_reg_at
+                FROM reg_customers c
+                LEFT JOIN registrations r ON r.customer_id = c.id
+                {where}
+                GROUP BY c.id
+                ORDER BY c.name
+                LIMIT %s OFFSET %s
+            """, params + [limit, offset])
+            rows = await cur.fetchall()
+
+            await cur.execute(f"""
+                SELECT COUNT(DISTINCT c.id) AS total
+                FROM reg_customers c {where}
+            """, params)
+            total = (await cur.fetchone())['total']
+
+    return {
+        "total": total,
+        "items": [dict(r) for r in rows],
+    }
+
+
+@admin_router.get("/reg/customers/{customer_id}")
+async def admin_get_customer(
+    customer_id: int,
+    staff = Depends(get_current_staff),
+):
+    """單一客戶完整資料 + 報名歷程"""
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("""
+                SELECT id, name, id_number,
+                       mobile_phone AS phone, home_phone, email, mid,
+                       nickname, name_en, birth_date, nationality, blood_type,
+                       address, emergency_contact, emergency_phone,
+                       height, weight, shoe_size, vision_left, vision_right,
+                       payment_date, membership_expiry,
+                       created_at, updated_at
+                FROM reg_customers WHERE id=%s
+            """, (customer_id,))
+            customer = await cur.fetchone()
+            if not customer:
+                raise HTTPException(404, "客戶不存在")
+
+            await cur.execute("""
+                SELECT r.id, r.reg_status, r.payment_status,
+                       r.registered_at, r.confirmed_at,
+                       r.transfer_bank, r.transfer_date,
+                       r.waitlist_position, r.notes,
+                       s.label AS session_label, s.start_date, s.end_date,
+                       co.title AS course_title, co.course_code
+                FROM registrations r
+                JOIN reg_sessions s  ON s.id  = r.session_id
+                JOIN reg_courses  co ON co.id = s.course_id
+                WHERE r.customer_id = %s
+                ORDER BY r.registered_at DESC
+            """, (customer_id,))
+            regs = await cur.fetchall()
+
+    return {
+        "customer": dict(customer),
+        "registrations": [dict(r) for r in regs],
+    }

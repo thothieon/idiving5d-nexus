@@ -11,11 +11,11 @@ from typing import Any
 
 import uuid
 import mimetypes
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, File
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.db import get_conn
-from app.auth_staff import get_current_staff, require_admin_staff
+from app.auth_staff import get_current_staff, require_admin_staff, _load_staff_by_token
 from app.security_staff_tokens import generate_admin_token, sha256_hex, token_prefix
 from app.auth_password import verify_password
 from pydantic import BaseModel
@@ -1392,3 +1392,48 @@ async def update_customer_name(
                 raise HTTPException(status_code=404, detail="customer not found")
         await conn.commit()
     return {"ok": True, "customer_name": name}
+
+
+# ── SSE：工單即時推播 ─────────────────────────────────────────
+@router.get("/sse/tickets")
+async def sse_tickets(request: Request, token: str = Query(...)):
+    staff = await _load_staff_by_token(token)
+    if not staff:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+    async def event_stream():
+        last_sig = None
+        heartbeat = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                async with get_conn() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            "SELECT COALESCE(MAX(UNIX_TIMESTAMP(updated_at)), 0) AS ts, COUNT(*) AS cnt"
+                            " FROM tickets WHERE status IN ('open','pending')"
+                        )
+                        row = await cur.fetchone()
+                sig = f"{row['ts']}:{row['cnt']}"
+                if last_sig is not None and sig != last_sig:
+                    yield "event: update\ndata: 1\n\n"
+                last_sig = sig
+            except Exception:
+                pass
+
+            heartbeat += 1
+            if heartbeat >= 15:          # 每 30 秒送一次 keep-alive
+                yield ": ping\n\n"
+                heartbeat = 0
+
+            await asyncio.sleep(2)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # 告知 Nginx 不要緩衝 SSE
+        },
+    )

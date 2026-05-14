@@ -5,6 +5,7 @@ export type TicketStatus = 'open' | 'pending' | 'closed';
 
 export interface StaffPermissions {
   can_registration?: boolean;
+  can_customers?:    boolean;
   can_courses?:      boolean;
   can_pagestats?:    boolean;
   can_linestats?:    boolean;
@@ -298,12 +299,78 @@ export interface RegRegistration {
   payment_date:       string | null;
   membership_expiry:  string | null;
   // 報名狀態
-  reg_status:         'pending' | 'confirmed' | 'cancelled' | 'waitlist';
+  reg_status:         'pending' | 'data_confirmed' | 'payment_submitted' | 'confirmed' | 'cancelled' | 'waitlist';
   payment_status:     'unpaid' | 'paid';
   waitlist_position:  number | null;
   registered_at:      string;
   confirmed_at:       string | null;
   notes:              string | null;
+  // 付款流程
+  transfer_bank:      string | null;
+  transfer_date:      string | null;
+  transfer_note:      string | null;
+  payment_submitted_at: string | null;
+  // 健康申明
+  health_form:        Record<string, boolean | string | null> | null;
+}
+
+export interface CustomerListItem {
+  id:                number;
+  name:              string;
+  phone:             string;
+  email:             string | null;
+  id_number:         string;
+  mid:               string | null;
+  nickname:          string | null;
+  birth_date:        string | null;
+  membership_expiry: string | null;
+  reg_count:         number;
+  confirmed_count:   number;
+  last_reg_at:       string | null;
+}
+
+export interface CustomerDetail {
+  id:                number;
+  name:              string;
+  id_number:         string;
+  phone:             string;
+  home_phone:        string | null;
+  email:             string | null;
+  mid:               string | null;
+  nickname:          string | null;
+  name_en:           string | null;
+  birth_date:        string | null;
+  nationality:       string | null;
+  blood_type:        string | null;
+  address:           string | null;
+  emergency_contact: string | null;
+  emergency_phone:   string | null;
+  height:            number | null;
+  weight:            number | null;
+  shoe_size:         number | null;
+  vision_left:       number | null;
+  vision_right:      number | null;
+  payment_date:      string | null;
+  membership_expiry: string | null;
+  created_at:        string;
+  updated_at:        string;
+}
+
+export interface CustomerRegHistory {
+  id:              number;
+  reg_status:      string;
+  payment_status:  string;
+  registered_at:   string;
+  confirmed_at:    string | null;
+  transfer_bank:   string | null;
+  transfer_date:   string | null;
+  waitlist_position: number | null;
+  notes:           string | null;
+  session_label:   string;
+  start_date:      string;
+  end_date:        string;
+  course_title:    string;
+  course_code:     string;
 }
 
 export interface RegCustomerUpdate {
@@ -322,8 +389,43 @@ export interface RegCustomerUpdate {
   emergency_phone?:    string | null;
   height?:             number | null;
   weight?:             number | null;
+  shoe_size?:          number | null;
   vision_left?:        number | null;
   vision_right?:       number | null;
   payment_date?:       string | null;
   membership_expiry?:  string | null;
+}
+
+// ── 待處理清單 ───────────────────────────────────────────────
+export interface TodoItem {
+  id:               number;
+  title:            string;
+  note:             string | null;
+  priority:         1 | 2 | 3;
+  due_date:         string | null;
+  ticket_id:        number | null;
+  is_done:          number;
+  done_at:          string | null;
+  assignee_name:    string | null;
+  created_by_name:  string | null;
+  created_at:       string;
+  updated_at:       string;
+}
+
+// ── RAG 知識庫 ────────────────────────────────────────────────
+export interface KnowledgeChunk {
+  id:            number;
+  category:      'faq' | 'course' | 'policy' | 'general';
+  title:         string;
+  content:       string;
+  is_active:     number;
+  has_embedding: number;
+  created_at:    string;
+  updated_at:    string;
+}
+
+export interface RagSource {
+  id:    number;
+  title: string;
+  score: number;
 }

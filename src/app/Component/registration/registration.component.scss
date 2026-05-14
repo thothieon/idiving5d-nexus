@@ -374,3 +374,8 @@ select option { background: #111827; }
   .form-group { margin-bottom: 0; }
   .form-group.full { grid-column: 1 / -1; }
 }
+
+.health-yes span:last-child {
+  color: #fbbf24;
+  font-size: 0.85em;
+}

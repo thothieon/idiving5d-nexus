@@ -7,6 +7,7 @@
   color: $dark-text;
 }
 
+// ── 第一排：品牌 + 登出 ───────────────────────────────────────
 .topbar {
   position: sticky;
   top: 0;
@@ -14,16 +15,19 @@
   height: 52px;
   @include flex-center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 16px;
   @include glass;
   border-bottom: 1px solid $dark-border;
 }
 
 .brand {
   @include flex-center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .dot {
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
   border-radius: 999px;
@@ -35,17 +39,47 @@
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.actions {
-  @include flex-center;
+.user-name {
   font-size: 13px;
+  color: $dark-muted;
+  white-space: nowrap;
 }
 
+.logout-btn {
+  flex-shrink: 0;
+}
+
+// ── 第二排：導覽連結 ──────────────────────────────────────────
+.topnav {
+  position: sticky;
+  top: 52px;
+  z-index: 9;
+  @include glass;
+  border-bottom: 1px solid $dark-border;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+
+  a.link {
+    white-space: nowrap;
+    font-size: 13px;
+    padding: 5px 10px;
+  }
+}
+
+// ── 主內容 ────────────────────────────────────────────────────
 .main {
   padding: 12px 12px 72px;
 }
 
+// ── 底部導覽 ──────────────────────────────────────────────────
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -69,5 +103,35 @@
     &.active {
       color: $accent;
     }
+  }
+}
+
+// ── 手機響應式 ────────────────────────────────────────────────
+@media (max-width: 640px) {
+  .topbar {
+    padding: 0 10px;
+  }
+
+  .title {
+    font-size: 13px;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .topnav {
+    top: 52px;
+    padding: 5px 8px;
+    gap: 2px;
+
+    a.link {
+      font-size: 12px;
+      padding: 5px 8px;
+    }
+  }
+
+  .main {
+    padding: 8px 8px 72px;
   }
 }

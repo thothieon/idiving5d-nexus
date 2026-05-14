@@ -167,6 +167,7 @@
     </div>
 
     <div class="drawer-tabs">
+      <button [class.active]="rightTab==='todos'"   (click)="openTodosTab()">📋 待辦</button>
       <button [class.active]="rightTab==='status'"  (click)="rightTab='status'">狀態</button>
       <button [class.active]="rightTab==='notes'"   (click)="rightTab='notes'">筆記</button>
       <button [class.active]="rightTab==='intake'"  (click)="openIntakeTab()">🤖 資訊</button>
@@ -466,6 +467,15 @@
           </button>
         </div>
 
+        <!-- RAG 參考來源 -->
+        <div class="rag-sources" *ngIf="intake.rag_sources && intake.rag_sources.length > 0">
+          <div class="rag-sources-label">📚 知識庫參考</div>
+          <div class="rag-source-item" *ngFor="let s of intake.rag_sources">
+            <span class="rag-source-title">{{ s.title }}</span>
+            <span class="rag-source-score">{{ (s.score * 100).toFixed(0) }}%</span>
+          </div>
+        </div>
+
         <div class="intake-updated">最後更新：{{ formatDate(intake.updated_at) }}</div>
 
       </ng-container>
@@ -475,13 +485,71 @@
     <div class="drawer-body" *ngIf="rightTab==='history'">
       <div class="empty-hint" *ngIf="!sessionHistory.length">尚無記錄</div>
       <div class="history-row" *ngFor="let h of sessionHistory">
-        <div class="h-status" [style.color]="statusColor">{{ h.status_label }}</div>
+        <div class="h-status" [style.color]="STATUS_COLOR[h.status]">{{ h.status_label }}</div>
         <div class="h-meta">
           <span>{{ h.triggered_by === 'staff' ? (h.staff_name || '客服') : h.triggered_by }}</span>
           <span>{{ formatTime(h.created_at) }}</span>
         </div>
         <div class="h-note" *ngIf="h.note">{{ h.note }}</div>
       </div>
+    </div>
+
+    <!-- ── 待辦 Tab（方案 A）── -->
+    <div class="drawer-body todo-drawer-body" *ngIf="rightTab==='todos'">
+
+      <!-- 新增輸入區 -->
+      <div class="todo-add-form">
+        <input class="todo-add-input" type="text" [(ngModel)]="todoAddTitle"
+               placeholder="新待辦標題…" maxlength="200"
+               (keydown.enter)="addTicketTodo()" />
+        <textarea class="todo-add-note" [(ngModel)]="todoAddNote"
+                  placeholder="說明（選填）" rows="2"></textarea>
+        <div class="todo-add-row">
+          <select class="todo-priority-sel" [(ngModel)]="todoAddPriority">
+            <option [value]="1">一般</option>
+            <option [value]="2">重要</option>
+            <option [value]="3">緊急</option>
+          </select>
+          <button class="todo-add-btn" [disabled]="todoAdding" (click)="addTicketTodo()">
+            {{ todoAdding ? '…' : '＋ 新增' }}
+          </button>
+        </div>
+        <div class="todo-add-err" *ngIf="todoAddError">{{ todoAddError }}</div>
+      </div>
+
+      <div class="todo-toggle-row">
+        <label class="toggle-label">
+          <input type="checkbox" [(ngModel)]="todoShowDone" (change)="loadTicketTodos()" />
+          顯示已完成
+        </label>
+        <span class="todo-count">{{ ticketTodos.length }} 項</span>
+      </div>
+
+      <div class="todo-loading" *ngIf="todoLoading">載入中…</div>
+      <div class="empty-hint" *ngIf="!todoLoading && !ticketTodos.length">此工單尚無待辦事項</div>
+
+      <div class="ticket-todo-item" *ngFor="let t of ticketTodos"
+           [class.done]="t.is_done"
+           [class.overdue]="isTodoOverdue(t)">
+        <button class="t-check" (click)="toggleTicketTodoDone(t)">
+          {{ t.is_done ? '✅' : '⬜' }}
+        </button>
+        <div class="t-body">
+          <div class="t-top">
+            <span class="t-priority" [ngClass]="todoPriorityClass[t.priority]">
+              {{ todoPriorityLabel[t.priority] }}
+            </span>
+            <span class="t-title" [class.done-text]="t.is_done">{{ t.title }}</span>
+          </div>
+          <div class="t-note" *ngIf="t.note">{{ t.note }}</div>
+          <div class="t-meta">
+            <span *ngIf="t.due_date" [class.overdue-text]="isTodoOverdue(t)">📅 {{ t.due_date }}</span>
+            <span *ngIf="t.assignee_name">👤 {{ t.assignee_name }}</span>
+          </div>
+        </div>
+        <button class="t-del" (click)="deleteTicketTodo(t)">🗑</button>
+      </div>
+
     </div>
   </aside>
 

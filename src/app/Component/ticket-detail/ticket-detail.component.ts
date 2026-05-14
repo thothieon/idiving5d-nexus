@@ -14,7 +14,7 @@ import { AdminApiService }   from '../../Service/api/admin-api.service';
 import { AdminTokenService } from '../../Service/auth/admin-token.service';
 import {
   TicketMessage, SessionHistory, AllowedNext,
-  CustomerNote, Tag,
+  CustomerNote, Tag, TodoItem,
   SessionStatus, SESSION_STATUS_LABEL, SESSION_STATUS_COLOR,
 } from '../../Service/api/models';
 
@@ -51,7 +51,20 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
 
   // ── 右側抽屜 ────────────────────────────────────────────
   showPanel = false;
-  rightTab: 'status' | 'notes' | 'history' | 'payment' | 'intake' = 'status';
+  rightTab: 'status' | 'notes' | 'history' | 'payment' | 'intake' | 'todos' = 'status';
+
+  // ── 工單待辦（方案 A）───────────────────────────────────
+  ticketTodos:    TodoItem[] = [];
+  todoLoading     = false;
+  todoShowDone    = false;
+  todoAddTitle    = '';
+  todoAddNote     = '';
+  todoAddPriority = 1;
+  todoAdding      = false;
+  todoAddError    = '';
+
+  readonly todoPriorityLabel: Record<number, string> = { 1: '一般', 2: '重要', 3: '緊急' };
+  readonly todoPriorityClass: Record<number, string> = { 1: 'p-normal', 2: 'p-important', 3: 'p-urgent' };
 
   // ── 資訊萃取 / 意圖 ──────────────────────────────────────
   intake: any = null;
@@ -663,6 +676,7 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
       console.error('fetchAsBlobUrl failed', e);
     } finally {
       this.mediaLoading.delete(key);
+      this.cdr.detectChanges();
     }
   }
 
@@ -738,6 +752,70 @@ export class TicketDetailComponent implements OnInit, OnDestroy, AfterViewChecke
   get statusColor(): string { return SESSION_STATUS_COLOR[this.currentStatus] ?? '#9E9E9E'; }
   get statusLabel(): string { return SESSION_STATUS_LABEL[this.currentStatus] ?? this.currentStatus; }
 
+  readonly STATUS_COLOR = SESSION_STATUS_COLOR;
+
   trackById(_: number, m: TicketMessage) { return m.id; }
   trackNoteById(_: number, n: CustomerNote) { return n.id; }
+
+  // ── 工單待辦（方案 A）────────────────────────────────────
+
+  openTodosTab() {
+    this.rightTab = 'todos';
+    this.loadTicketTodos();
+  }
+
+  loadTicketTodos() {
+    this.todoLoading  = true;
+    this.todoAddError = '';
+    this.api.todoList(this.todoShowDone ? 1 : 0, this.ticketId).subscribe({
+      next: r => { this.ticketTodos = r.items; this.todoLoading = false; this.cdr.detectChanges(); },
+      error: () => { this.todoLoading = false; this.cdr.detectChanges(); },
+    });
+  }
+
+  addTicketTodo() {
+    if (!this.todoAddTitle.trim()) { this.todoAddError = '請填寫標題'; return; }
+    this.todoAdding   = true;
+    this.todoAddError = '';
+    const body: any = {
+      title:     this.todoAddTitle.trim(),
+      priority:  this.todoAddPriority,
+      ticket_id: this.ticketId,
+    };
+    if (this.todoAddNote.trim()) body.note = this.todoAddNote.trim();
+    this.api.todoCreate(body).subscribe({
+      next: () => {
+        this.todoAdding      = false;
+        this.todoAddTitle    = '';
+        this.todoAddNote     = '';
+        this.todoAddPriority = 1;
+        this.loadTicketTodos();
+      },
+      error: () => {
+        this.todoAddError = '新增失敗';
+        this.todoAdding   = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  toggleTicketTodoDone(item: TodoItem) {
+    this.api.todoPatch(item.id, { is_done: item.is_done ? 0 : 1 }).subscribe({
+      next: () => this.loadTicketTodos(),
+      error: () => {},
+    });
+  }
+
+  deleteTicketTodo(item: TodoItem) {
+    if (!confirm(`刪除「${item.title}」？`)) return;
+    this.api.todoDelete(item.id).subscribe({
+      next: () => this.loadTicketTodos(),
+      error: () => {},
+    });
+  }
+
+  isTodoOverdue(item: TodoItem): boolean {
+    if (!item.due_date || item.is_done) return false;
+    return item.due_date < new Date().toISOString().split('T')[0];
+  }
 }

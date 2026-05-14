@@ -1,4 +1,4 @@
-import { Component, OnInit, DestroyRef, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, DestroyRef, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -20,7 +20,7 @@ type Mode = 'turn' | 'closed';
   templateUrl: './turn-workbench.component.html',
   styleUrl: './turn-workbench.component.scss',
 })
-export class TurnWorkbenchComponent implements OnInit {
+export class TurnWorkbenchComponent implements OnInit, OnDestroy {
   mode: Mode = 'turn';
   isAdmin = false;
 
@@ -49,6 +49,8 @@ export class TurnWorkbenchComponent implements OnInit {
 
   private refreshTrigger$ = new Subject<void>();
   private destroyRef = inject(DestroyRef);
+  private evtSource?: EventSource;
+  private sseReconnectTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private api: AdminApiService,
@@ -64,6 +66,7 @@ export class TurnWorkbenchComponent implements OnInit {
     }
     this.isAdmin = this.tokenSvc.isAdmin();
     this.loadTags();
+    this.setupSSE();
 
     merge(of(null), interval(30000), this.refreshTrigger$)
       .pipe(
@@ -93,6 +96,26 @@ export class TurnWorkbenchComponent implements OnInit {
         this.loading = false;
         this.cdr.detectChanges();
       });
+  }
+
+  ngOnDestroy() {
+    this.evtSource?.close();
+    clearTimeout(this.sseReconnectTimer);
+  }
+
+  private setupSSE() {
+    const token = this.tokenSvc.token();
+    if (!token) return;
+    this.evtSource?.close();
+    const url = `/admin/api/sse/tickets?token=${encodeURIComponent(token)}`;
+    this.evtSource = new EventSource(url);
+    this.evtSource.addEventListener('update', () => {
+      this.refreshTrigger$.next();
+    });
+    this.evtSource.onerror = () => {
+      this.evtSource?.close();
+      this.sseReconnectTimer = setTimeout(() => this.setupSSE(), 5000);
+    };
   }
 
   setMode(m: Mode) {

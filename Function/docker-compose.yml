@@ -37,6 +37,19 @@ services:
       ATM_BANK_NAME: "中國信託 士林分行"
       ATM_ACCOUNT_NAME: "愛潛水股份有限公司"
       ATM_ACCOUNT: "285-54009941-9"
+      DEPOSIT_AMOUNT: "3000"
+
+      # === Email SMTP（智邦互聯，備用）===
+      SMTP_HOST: "mail.url.com.tw"
+      SMTP_PORT: "587"
+      SMTP_USER: "info@idiving.com.tw"
+      SMTP_PASSWORD: "idiving1105"
+      SMTP_FROM: "愛潛水 iDiving <info@idiving.com.tw>"
+      FRONTEND_URL: "https://www.idiving.com.tw"
+
+      # === Email SMTP（Gmail，主要使用）===
+      GMAIL_USER: "hsiehieon@gmail.com"
+      GMAIL_PASSWORD: "cczgmnflnrbxjdaj"
 
       # === 圖片傳送（LINE 需要可公開存取的 URL）===
       PUBLIC_BASE_URL: "https://api.idiving.com.tw/admin/api"   # 例：https://your-domain.com/admin/api
@@ -60,6 +73,9 @@ services:
       --timeout ${GUNICORN_TIMEOUT:-60}
       --access-logfile -
       --error-logfile -
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     restart: unless-stopped
 
   web:

@@ -16,7 +16,10 @@
     </div>
 
     <div class="row2">
-      <div class="subject">{{ subject() }}</div>
+      <span class="status-chip" [style.color]="statusColor()" [style.border-color]="statusColor()">
+        {{ ticket.status_label || ticket.current_status }}
+      </span>
+      <span class="agent-chip" *ngIf="ticket.active_agent">· {{ ticket.active_agent }}</span>
     </div>
 
     <div class="row3" *ngIf="preview()">
@@ -31,7 +34,7 @@
     </div>
 
     <div class="meta">
-      #{{ ticket.ticket_id }} · {{ ticket.channel_type }} · {{ ticket.updated_at }}
+      #{{ ticket.ticket_id }} · {{ ticket.channel_type }} · {{ formatUpdatedAt() }}
     </div>
   </div>
 </a>

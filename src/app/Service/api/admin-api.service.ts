@@ -12,6 +12,8 @@ import {
   StaffItem, StaffPermissions, Tag,
   CourseSchedule, CourseScheduleForm,
   RegCourse, RegCourseForm, RegSession, RegSessionForm, RegRegistration, RegCustomerUpdate,
+  CustomerListItem, CustomerDetail, CustomerRegHistory, TodoItem,
+  KnowledgeChunk,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -391,12 +393,84 @@ export class AdminApiService {
     return this.http.put<any>(`${this.base}/reg/customers/${customerId}`, body);
   }
 
+  regConfirmData(regId: number): Observable<any> {
+    return this.http.post<any>(`${this.base}/reg/registrations/${regId}/confirm-data`, {});
+  }
+
+  regConfirmPayment(regId: number): Observable<any> {
+    return this.http.post<any>(`${this.base}/reg/registrations/${regId}/confirm-payment`, {});
+  }
+
+  regResendEmail(regId: number): Observable<any> {
+    return this.http.post<any>(`${this.base}/reg/registrations/${regId}/resend-email`, {});
+  }
+
+  // ── 客戶管理 ────────────────────────────────────────────────
+
+  customerList(q: string, offset: number, limit: number): Observable<{ total: number; items: CustomerListItem[] }> {
+    let params = new HttpParams().set('limit', limit).set('offset', offset);
+    if (q) params = params.set('q', q);
+    return this.http.get<{ total: number; items: CustomerListItem[] }>(`${this.base}/reg/customers`, { params });
+  }
+
+  customerGet(id: number): Observable<{ customer: CustomerDetail; registrations: CustomerRegHistory[] }> {
+    return this.http.get<{ customer: CustomerDetail; registrations: CustomerRegHistory[] }>(`${this.base}/reg/customers/${id}`);
+  }
+
+  customerUpdate(id: number, body: RegCustomerUpdate): Observable<any> {
+    return this.http.put<any>(`${this.base}/reg/customers/${id}`, body);
+  }
+
+  // ── 待處理清單 ────────────────────────────────────────────
+
+  todoList(showDone = 0, ticketId?: number): Observable<{ items: TodoItem[] }> {
+    const p: any = { show_done: showDone };
+    if (ticketId != null) p.ticket_id = ticketId;
+    return this.http.get<{ items: TodoItem[] }>(`${this.base}/todos`, { params: p });
+  }
+
+  todoCreate(body: { title: string; note?: string; assignee_id?: number | null; due_date?: string | null; ticket_id?: number | null; priority?: number }): Observable<{ ok: boolean; id: number }> {
+    return this.http.post<{ ok: boolean; id: number }>(`${this.base}/todos`, body);
+  }
+
+  todoPatch(id: number, body: Partial<{ title: string; note: string; assignee_id: number | null; due_date: string | null; ticket_id: number | null; priority: number; is_done: number }>): Observable<any> {
+    return this.http.patch<any>(`${this.base}/todos/${id}`, body);
+  }
+
+  todoDelete(id: number): Observable<any> {
+    return this.http.delete<any>(`${this.base}/todos/${id}`);
+  }
+
+  // ── RAG 知識庫 ────────────────────────────────────────────────
+
+  ragList(category?: string): Observable<{ items: KnowledgeChunk[] }> {
+    const params: Record<string, string> = {};
+    if (category) params['category'] = category;
+    return this.http.get<{ items: KnowledgeChunk[] }>(`${this.base}/rag/chunks`, { params });
+  }
+
+  ragCreate(body: { category: string; title: string; content: string; is_active?: number }): Observable<{ ok: boolean; id: number; embedded: boolean }> {
+    return this.http.post<{ ok: boolean; id: number; embedded: boolean }>(`${this.base}/rag/chunks`, body);
+  }
+
+  ragUpdate(id: number, body: Partial<{ category: string; title: string; content: string; is_active: number }>): Observable<{ ok: boolean }> {
+    return this.http.patch<{ ok: boolean }>(`${this.base}/rag/chunks/${id}`, body);
+  }
+
+  ragDelete(id: number): Observable<{ ok: boolean }> {
+    return this.http.delete<{ ok: boolean }>(`${this.base}/rag/chunks/${id}`);
+  }
+
+  ragReembedAll(): Observable<{ ok: boolean; updated: number }> {
+    return this.http.post<{ ok: boolean; updated: number }>(`${this.base}/rag/chunks/reembed-all`, {});
+  }
+
   regExportUrl(params: { session_id?: number; course_id?: number; reg_status?: string }): string {
     const q = new URLSearchParams();
     if (params.session_id) q.set('session_id', String(params.session_id));
     if (params.course_id)  q.set('course_id',  String(params.course_id));
     if (params.reg_status) q.set('reg_status',  params.reg_status);
-    const token = localStorage.getItem('admin_token') ?? '';
+    const token = localStorage.getItem('ADMIN_TOKEN') ?? '';
     q.set('x_admin_token', token);
     return `${this.base}/reg/registrations/export?${q.toString()}`;
   }

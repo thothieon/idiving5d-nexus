@@ -65,19 +65,27 @@ export class RegistrationComponent implements OnInit {
   sessionFormError = '';
 
   readonly statusOptions = [
-    { value: '',           label: '全部狀態' },
-    { value: 'pending',    label: '待確認' },
-    { value: 'confirmed',  label: '已確認' },
-    { value: 'waitlist',   label: '候補' },
-    { value: 'cancelled',  label: '已取消' },
+    { value: '',                  label: '全部狀態' },
+    { value: 'pending',           label: '待確認' },
+    { value: 'data_confirmed',    label: '資料確認（待繳費）' },
+    { value: 'payment_submitted', label: '已提交匯款' },
+    { value: 'confirmed',         label: '完成報名' },
+    { value: 'waitlist',          label: '候補' },
+    { value: 'cancelled',         label: '已取消' },
   ];
 
   readonly statusLabel: Record<string, string> = {
-    pending:   '待確認',
-    confirmed: '已確認',
-    cancelled: '已取消',
-    waitlist:  '候補',
+    pending:           '待確認',
+    data_confirmed:    '待繳費',
+    payment_submitted: '已提交匯款',
+    confirmed:         '完成報名',
+    cancelled:         '已取消',
+    waitlist:          '候補',
   };
+
+  confirmingData    = false;
+  confirmingPayment = false;
+  resendingEmail    = false;
 
   readonly paymentLabel: Record<string, string> = {
     unpaid: '未付款',
@@ -238,6 +246,62 @@ export class RegistrationComponent implements OnInit {
       error: (err) => {
         this.updateError = err.error?.detail || '更新失敗';
         this.updatingReg = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  confirmData() {
+    if (!this.selectedReg) return;
+    this.confirmingData = true;
+    this.updateError    = '';
+    this.api.regConfirmData(this.selectedReg.id).subscribe({
+      next: () => {
+        this.flash('✓ 資料已確認，付款通知 email 已發送');
+        this.selectedReg    = null;
+        this.confirmingData = false;
+        this.loadRegistrations();
+      },
+      error: (err) => {
+        this.updateError    = err.error?.detail || '操作失敗';
+        this.confirmingData = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  confirmPayment() {
+    if (!this.selectedReg) return;
+    this.confirmingPayment = true;
+    this.updateError       = '';
+    this.api.regConfirmPayment(this.selectedReg.id).subscribe({
+      next: () => {
+        this.flash('✓ 報名完成，通知 email 已發送');
+        this.selectedReg       = null;
+        this.confirmingPayment = false;
+        this.loadRegistrations();
+      },
+      error: (err) => {
+        this.updateError       = err.error?.detail || '操作失敗';
+        this.confirmingPayment = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  resendEmail() {
+    if (!this.selectedReg) return;
+    this.resendingEmail = true;
+    this.updateError    = '';
+    this.api.regResendEmail(this.selectedReg.id).subscribe({
+      next: (res) => {
+        const msg = res.sent === 'payment' ? '✓ 付款通知信已重發' : '✓ 完成確認信已重發';
+        this.flash(msg);
+        this.resendingEmail = false;
+      },
+      error: (err) => {
+        this.updateError    = err.error?.detail || '重發失敗';
+        this.resendingEmail = false;
         this.cdr.detectChanges();
       }
     });
@@ -419,6 +483,24 @@ export class RegistrationComponent implements OnInit {
   courseName(id: number): string {
     return this.courses.find(c => c.id === id)?.title ?? '';
   }
+
+  healthFormHasYes(hf: Record<string, any> | null): boolean {
+    if (!hf) return false;
+    return Object.entries(hf).some(([k, v]) => k !== 'otherNote' && k !== 'acknowledged' && v === true);
+  }
+
+  readonly healthQuestions: { key: string; text: string }[] = [
+    { key: 'q1',  text: '肺部／呼吸系統、心臟及／或血液問題，影響正常身體或精神表現' },
+    { key: 'q2',  text: '已超過 45 歲' },
+    { key: 'q3',  text: '完成中等強度運動很吃力，或過去 12 個月因健康原因無法參加體能活動' },
+    { key: 'q4',  text: '眼睛、耳朵、或鼻腔／鼻竇存在問題' },
+    { key: 'q5',  text: '過去 12 個月做過手術，或手術留有持續後遺症' },
+    { key: 'q6',  text: '意識喪失、偏頭痛、癲癇、中風、嚴重頭部損傷或持續神經損傷' },
+    { key: 'q7',  text: '因心理問題、人格障礙、恐慌發作或毒品酒精成癮接受治療（含過去 5 年）' },
+    { key: 'q8',  text: '背部健康問題、疝氣、潰瘍或糖尿病' },
+    { key: 'q9',  text: '胃腸問題，包括最近腹瀉' },
+    { key: 'q10', text: '正在服用處方藥（不含避孕藥或一般抗瘧藥）' },
+  ];
 
   goBack() {
     this.router.navigateByUrl('/admin/turn');

@@ -161,27 +161,104 @@
 
     <div class="dialog-error" *ngIf="updateError">{{ updateError }}</div>
 
-    <!-- 狀態操作 -->
+    <!-- 狀態操作（依流程顯示） -->
     <div class="action-group">
-      <div class="action-label">報名狀態</div>
-      <div class="action-btns">
-        <button class="ghost sm primary" [disabled]="updatingReg || selectedReg.reg_status === 'confirmed'"
-                (click)="updateRegStatus('confirmed')">確認</button>
-        <button class="ghost sm" [disabled]="updatingReg || selectedReg.reg_status === 'waitlist'"
-                (click)="updateRegStatus('waitlist')">移至候補</button>
-        <button class="ghost sm danger" [disabled]="updatingReg || selectedReg.reg_status === 'cancelled'"
-                (click)="updateRegStatus('cancelled')">取消</button>
+      <div class="action-label">
+        報名狀態：
+        <span class="badge" [class]="'s-' + selectedReg.reg_status">
+          {{ statusLabel[selectedReg.reg_status] }}
+        </span>
+      </div>
+
+      <!-- pending → 確認資料（發付款 email） -->
+      <div class="action-btns" *ngIf="selectedReg.reg_status === 'pending' || selectedReg.reg_status === 'waitlist'">
+        <button class="ghost sm primary" [disabled]="confirmingData" (click)="confirmData()">
+          {{ confirmingData ? '處理中…' : '✓ 確認資料（發付款 email）' }}
+        </button>
+        <button class="ghost sm danger" [disabled]="updatingReg" (click)="updateRegStatus('cancelled')">取消報名</button>
+      </div>
+
+      <!-- data_confirmed → 等待客戶匯款中 -->
+      <div class="action-btns" *ngIf="selectedReg.reg_status === 'data_confirmed'">
+        <span class="hint-text">等待客戶完成匯款...</span>
+        <button class="ghost sm" [disabled]="resendingEmail" (click)="resendEmail()">
+          {{ resendingEmail ? '發送中…' : '📧 重發付款通知信' }}
+        </button>
+        <button class="ghost sm danger" [disabled]="updatingReg" (click)="updateRegStatus('cancelled')">取消報名</button>
+      </div>
+
+      <!-- payment_submitted → 確認完成 -->
+      <div class="action-btns" *ngIf="selectedReg.reg_status === 'payment_submitted'">
+        <button class="ghost sm primary" [disabled]="confirmingPayment" (click)="confirmPayment()">
+          {{ confirmingPayment ? '處理中…' : '🎉 確認完成報名（發完成 email）' }}
+        </button>
+        <button class="ghost sm" [disabled]="resendingEmail" (click)="resendEmail()">
+          {{ resendingEmail ? '發送中…' : '📧 重發付款通知信' }}
+        </button>
+        <button class="ghost sm danger" [disabled]="updatingReg" (click)="updateRegStatus('pending')">退回待確認</button>
+      </div>
+
+      <!-- confirmed / cancelled → 最終狀態 -->
+      <div class="action-btns" *ngIf="selectedReg.reg_status === 'confirmed' || selectedReg.reg_status === 'cancelled'">
+        <span class="hint-text">{{ selectedReg.reg_status === 'confirmed' ? '✅ 報名已完成' : '❌ 已取消' }}</span>
+        <button class="ghost sm" *ngIf="selectedReg.reg_status === 'confirmed'"
+                [disabled]="resendingEmail" (click)="resendEmail()">
+          {{ resendingEmail ? '發送中…' : '📧 重發完成確認信' }}
+        </button>
       </div>
     </div>
 
-    <!-- 付款操作 -->
-    <div class="action-group">
-      <div class="action-label">付款狀態</div>
-      <div class="action-btns">
-        <button class="ghost sm primary" [disabled]="updatingReg || selectedReg.payment_status === 'paid'"
-                (click)="updatePaymentStatus('paid')">標記已付款</button>
-        <button class="ghost sm" [disabled]="updatingReg || selectedReg.payment_status === 'unpaid'"
-                (click)="updatePaymentStatus('unpaid')">標記未付款</button>
+    <!-- 匯款資訊（payment_submitted 時顯示） -->
+    <div class="action-group" *ngIf="selectedReg.reg_status === 'payment_submitted'">
+      <div class="action-label">客戶匯款資訊</div>
+      <div class="detail-grid">
+        <div class="detail-row">
+          <span>帳號後5碼</span>
+          <span>{{ selectedReg.transfer_bank || '—' }}</span>
+        </div>
+        <div class="detail-row">
+          <span>匯款日期</span>
+          <span>{{ selectedReg.transfer_date || '—' }}</span>
+        </div>
+        <div class="detail-row" *ngIf="selectedReg.transfer_note">
+          <span>備註</span>
+          <span>{{ selectedReg.transfer_note }}</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ── 健康申明 ── -->
+    <div class="customer-section" *ngIf="selectedReg.health_form">
+      <div class="customer-section-header">
+        <span class="action-label">健康申明</span>
+        <span class="badge"
+              [class.s-confirmed]="!healthFormHasYes(selectedReg.health_form)"
+              [class.s-cancelled]="healthFormHasYes(selectedReg.health_form)">
+          {{ healthFormHasYes(selectedReg.health_form) ? '有填「是」' : '全部否' }}
+        </span>
+      </div>
+      <div class="detail-grid" *ngIf="healthFormHasYes(selectedReg.health_form)">
+        <ng-container *ngFor="let q of healthQuestions">
+          <div class="detail-row health-yes" *ngIf="selectedReg.health_form[q.key] === true">
+            <span>{{ q.key.toUpperCase() }}</span>
+            <span>{{ q.text }}</span>
+          </div>
+        </ng-container>
+        <div class="detail-row" *ngIf="selectedReg.health_form['otherNote']">
+          <span>補充說明</span>
+          <span>{{ selectedReg.health_form['otherNote'] }}</span>
+        </div>
+      </div>
+      <div class="hint-text" *ngIf="!healthFormHasYes(selectedReg.health_form)" style="padding:8px 0">
+        客戶所有健康問題均回答「否」
+      </div>
+    </div>
+    <div class="customer-section" *ngIf="!selectedReg.health_form">
+      <div class="customer-section-header">
+        <span class="action-label">健康申明</span>
+        <span class="hint-text">（尚未填寫）</span>
       </div>
     </div>
 
@@ -203,7 +280,7 @@
         <div class="detail-row" *ngIf="selectedReg.blood_type"><span>血型</span><span>{{ selectedReg.blood_type }}</span></div>
         <div class="detail-row"><span>行動電話</span><span>{{ selectedReg.phone }}</span></div>
         <div class="detail-row" *ngIf="selectedReg.home_phone"><span>住家電話</span><span>{{ selectedReg.home_phone }}</span></div>
-        <div class="detail-row" *ngIf="selectedReg.email"><span>電子郵件</span><span>{{ selectedReg.email }}</span></div>
+        <div class="detail-row"><span>電子郵件</span><span>{{ selectedReg.email || '—' }}</span></div>
         <div class="detail-row" *ngIf="selectedReg.mid"><span>MID</span><span>{{ selectedReg.mid }}</span></div>
         <div class="detail-row" *ngIf="selectedReg.address"><span>地址</span><span>{{ selectedReg.address }}</span></div>
         <div class="detail-row" *ngIf="selectedReg.emergency_contact"><span>緊急連絡人</span><span>{{ selectedReg.emergency_contact }}</span></div>
